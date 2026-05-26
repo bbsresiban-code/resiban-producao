@@ -70,7 +70,9 @@ with tab_lancamento:
                     nfs_desta_op = df_nfs_all[df_nfs_all["op_lavacao_id"] == str(op_id)]
                     if not nfs_desta_op.empty:
                         for _, nf_row in nfs_desta_op.iterrows():
-                            nfs_da_op.append(f"{nf_row['nf_apara']} ({nf_row['peso_kg']} kg)")
+                            fornec = nf_row.get('fornecedor', '')
+                            label = f"{nf_row['nf_apara']} - {fornec} ({nf_row['peso_kg']} kg)" if fornec else f"{nf_row['nf_apara']} ({nf_row['peso_kg']} kg)"
+                            nfs_da_op.append(label)
         except Exception:
             pass
 

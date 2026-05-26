@@ -100,6 +100,7 @@ with tab_nova:
             col_nf1, col_nf2 = st.columns(2)
             with col_nf1:
                 nf_apara = st.text_input("NF Apara")
+                fornecedor = st.text_input("Fornecedor")
                 quant_fardos = st.number_input("Quantidade de Fardos", min_value=0, step=1)
             with col_nf2:
                 peso_kg = st.number_input("Peso (kg)", min_value=0.0, step=0.5, format="%.1f")
@@ -124,6 +125,7 @@ with tab_nova:
                     nf_data = {
                         "op_lavacao_id": st.session_state["op_criada_id"],
                         "nf_apara": nf_apara.strip(),
+                        "fornecedor": fornecedor.strip(),
                         "quant_fardos": quant_fardos,
                         "peso_kg": peso_kg,
                         "obs": obs_nf.strip(),
@@ -142,7 +144,7 @@ with tab_nova:
                 if not nfs_op.empty:
                     st.caption("NFs adicionadas a esta OP:")
                     st.dataframe(
-                        nfs_op[["nf_apara", "quant_fardos", "peso_kg", "obs"]],
+                        nfs_op[["nf_apara", "fornecedor", "quant_fardos", "peso_kg", "obs"]],
                         use_container_width=True,
                         hide_index=True,
                     )
