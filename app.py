@@ -11,33 +11,37 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-pages = {
-    "Painel": [
-        st.Page("pages/1_dashboard.py", title="Dashboard", icon=":material/dashboard:", default=True),
+st.sidebar.markdown("## Resiban")
+st.sidebar.markdown("**Gestao de Producao**")
+st.sidebar.markdown("---")
+
+pagina = st.sidebar.radio(
+    "Menu",
+    [
+        "Dashboard",
+        "OP Lavacao",
+        "Producao Lavacao",
+        "OP Extrusao",
+        "Producao Extrusao",
+        "Laboratorio",
+        "Estoque",
+        "Romaneio",
+        "Exportar",
     ],
-    "Lavacao": [
-        st.Page("pages/2_op_lavacao.py", title="OP Lavacao", icon=":material/assignment:"),
-        st.Page("pages/3_producao_lavacao.py", title="Producao Lavacao", icon=":material/local_laundry_service:"),
-    ],
-    "Extrusao": [
-        st.Page("pages/4_op_extrusao.py", title="OP Extrusao", icon=":material/assignment:"),
-        st.Page("pages/5_producao_extrusao.py", title="Producao Extrusao", icon=":material/precision_manufacturing:"),
-    ],
-    "Qualidade": [
-        st.Page("pages/6_qualidade.py", title="Laboratorio", icon=":material/science:"),
-        st.Page("pages/7_estoque.py", title="Estoque", icon=":material/inventory:"),
-    ],
-    "Logistica": [
-        st.Page("pages/8_romaneio.py", title="Romaneio", icon=":material/local_shipping:"),
-        st.Page("pages/9_exportar.py", title="Exportar", icon=":material/download:"),
-    ],
+)
+
+paginas_map = {
+    "Dashboard": "pages/1_dashboard.py",
+    "OP Lavacao": "pages/2_op_lavacao.py",
+    "Producao Lavacao": "pages/3_producao_lavacao.py",
+    "OP Extrusao": "pages/4_op_extrusao.py",
+    "Producao Extrusao": "pages/5_producao_extrusao.py",
+    "Laboratorio": "pages/6_qualidade.py",
+    "Estoque": "pages/7_estoque.py",
+    "Romaneio": "pages/8_romaneio.py",
+    "Exportar": "pages/9_exportar.py",
 }
 
-nav = st.navigation(pages)
-
-with st.sidebar:
-    st.markdown("## Resiban")
-    st.markdown("**Gestao de Producao**")
-    st.markdown("---")
-
-nav.run()
+with open(paginas_map[pagina], encoding="utf-8") as f:
+    code = f.read()
+exec(code)
