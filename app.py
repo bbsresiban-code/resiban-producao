@@ -54,16 +54,16 @@ PAGINAS_POR_PERFIL = {
 }
 
 PAGINAS_MAP = {
-    "Dashboard": "pages/1_dashboard.py",
-    "OP Lavacao": "pages/2_op_lavacao.py",
-    "Producao Lavacao": "pages/3_producao_lavacao.py",
-    "OP Extrusao": "pages/4_op_extrusao.py",
-    "Producao Extrusao": "pages/5_producao_extrusao.py",
-    "Laboratorio": "pages/6_qualidade.py",
-    "Estoque": "pages/7_estoque.py",
-    "Romaneio": "pages/8_romaneio.py",
-    "Laudos Tecnicos": "pages/10_laudos.py",
-    "Exportar": "pages/9_exportar.py",
+    "Dashboard": "views/1_dashboard.py",
+    "OP Lavacao": "views/2_op_lavacao.py",
+    "Producao Lavacao": "views/3_producao_lavacao.py",
+    "OP Extrusao": "views/4_op_extrusao.py",
+    "Producao Extrusao": "views/5_producao_extrusao.py",
+    "Laboratorio": "views/6_qualidade.py",
+    "Estoque": "views/7_estoque.py",
+    "Romaneio": "views/8_romaneio.py",
+    "Laudos Tecnicos": "views/10_laudos.py",
+    "Exportar": "views/9_exportar.py",
 }
 
 if "logado" not in st.session_state:
