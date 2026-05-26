@@ -61,50 +61,46 @@ def _add_field(pdf: FPDF, label: str, value: str) -> None:
     pdf.cell(0, 7, str(value) if value is not None else "", new_x="LMARGIN", new_y="NEXT")
 
 
+def _draw_table_header(pdf: FPDF, headers: list[str], col_widths: list[float]) -> None:
+    """Desenha cabecalho da tabela na posicao atual."""
+    x_start = pdf.l_margin
+    y = pdf.get_y()
+    pdf.set_font("Helvetica", "B", 8)
+    for i, header in enumerate(headers):
+        x = x_start + sum(col_widths[:i])
+        pdf.rect(x, y, col_widths[i], 7)
+        pdf.set_xy(x, y)
+        pdf.cell(col_widths[i], 7, header, align="C")
+    pdf.set_xy(x_start, y + 7)
+
+
 def _add_table(pdf: FPDF, headers: list[str], rows: list[list[str]], col_widths: list[float] | None = None) -> None:
-    """Desenha tabela com bordas. Se col_widths nao informado, divide igualmente."""
+    """Desenha tabela com bordas usando posicionamento absoluto."""
     usable_width = pdf.w - pdf.l_margin - pdf.r_margin
     if col_widths is None:
         n = len(headers)
         col_widths = [usable_width / n] * n
 
-    # Cabecalho da tabela
-    pdf.set_font("Helvetica", "B", 9)
-    for i, header in enumerate(headers):
-        pdf.cell(col_widths[i], 7, header, border=1, align="C", new_x="END", new_y="TOP")
-    pdf.ln()
+    _draw_table_header(pdf, headers, col_widths)
 
-    # Linhas
-    pdf.set_font("Helvetica", "", 9)
+    pdf.set_font("Helvetica", "", 8)
+    row_height = 7
+    x_start = pdf.l_margin
+
     for row in rows:
-        max_lines = 1
-        # Calcular altura necessaria para multi-linha
-        cell_texts = []
-        for i, cell in enumerate(row):
-            text = str(cell) if cell is not None else ""
-            cell_texts.append(text)
-            lines = pdf.multi_cell(col_widths[i], 6, text, split_only=True)
-            max_lines = max(max_lines, len(lines))
-
-        row_height = max(7, max_lines * 6)
-
-        # Verificar se precisa nova pagina
         if pdf.get_y() + row_height > pdf.h - 20:
             pdf.add_page()
-            # Re-desenhar cabecalho da tabela
-            pdf.set_font("Helvetica", "B", 9)
-            for i, header in enumerate(headers):
-                pdf.cell(col_widths[i], 7, header, border=1, align="C", new_x="END", new_y="TOP")
-            pdf.ln()
-            pdf.set_font("Helvetica", "", 9)
+            _draw_table_header(pdf, headers, col_widths)
+            pdf.set_font("Helvetica", "", 8)
 
-        y_before = pdf.get_y()
-        x_start = pdf.get_x()
-        for i, text in enumerate(cell_texts):
+        y = pdf.get_y()
+        for i, cell in enumerate(row):
             x = x_start + sum(col_widths[:i])
-            pdf.set_xy(x, y_before)
-            pdf.cell(col_widths[i], row_height, text, border=1, align="C", new_x="END", new_y="TOP")
-        pdf.set_xy(x_start, y_before + row_height)
+            text = str(cell) if cell is not None else ""
+            pdf.rect(x, y, col_widths[i], row_height)
+            pdf.set_xy(x, y)
+            pdf.cell(col_widths[i], row_height, text, align="C")
+        pdf.set_xy(x_start, y + row_height)
 
 
 def _section_title(pdf: FPDF, title: str) -> None:
