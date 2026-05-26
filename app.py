@@ -7,13 +7,13 @@ import streamlit as st
 st.set_page_config(
     page_title="Resiban - Gestao de Producao",
     page_icon="♻️",
-    layout="wide",
+    layout="centered",
     initial_sidebar_state="expanded",
 )
 
 pages = {
     "Painel": [
-        st.Page("pages/1_dashboard.py", title="Dashboard", icon=":material/dashboard:"),
+        st.Page("pages/1_dashboard.py", title="Dashboard", icon=":material/dashboard:", default=True),
     ],
     "Lavacao": [
         st.Page("pages/2_op_lavacao.py", title="OP Lavacao", icon=":material/assignment:"),
@@ -36,7 +36,8 @@ pages = {
 nav = st.navigation(pages)
 
 with st.sidebar:
-    st.image("https://www.crbreciclagem.com.br/wp-content/uploads/2024/07/Logo-CRB-2024.webp", width=150)
-    st.caption("Resiban - Gestao de Producao")
+    st.markdown("## Resiban")
+    st.markdown("**Gestao de Producao**")
+    st.markdown("---")
 
 nav.run()
