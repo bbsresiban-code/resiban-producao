@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
 
-from utils.database import read_sheet, read_sheet_no_cache, append_row, proximo_sequencial
+from utils.database import read_sheet, read_sheet_no_cache, append_row, update_rows, proximo_sequencial
 from utils.formatters import formatar_data, formatar_peso
 
 try:
@@ -15,7 +15,7 @@ except ImportError:
 
 st.header("Ordem de Producao - Lavacao")
 
-tab_nova, tab_acompanhamento, tab_consultar = st.tabs(["Nova OP", "Acompanhamento", "Consultar OPs"])
+tab_nova, tab_editar, tab_acompanhamento, tab_consultar = st.tabs(["Nova OP", "Editar OP", "Acompanhamento", "Consultar OPs"])
 
 # ===========================================================================
 # TAB 1: Nova OP
@@ -181,7 +181,100 @@ with tab_nova:
                 st.error(f"Erro ao criar OP: {exc}")
 
 # ===========================================================================
-# TAB 2: Acompanhamento
+# TAB 2: Editar OP (adicionar NFs)
+# ===========================================================================
+with tab_editar:
+    st.subheader("Adicionar NFs a uma OP existente")
+
+    try:
+        df_ops_edit = read_sheet_no_cache("op_lavacao")
+    except Exception:
+        df_ops_edit = pd.DataFrame()
+
+    if df_ops_edit.empty:
+        st.info("Nenhuma OP cadastrada.")
+    else:
+        ops_abertas_edit = df_ops_edit[df_ops_edit["status"].astype(str).str.lower() == "aberta"]
+        if ops_abertas_edit.empty:
+            st.info("Nenhuma OP aberta para editar.")
+        else:
+            opcoes_edit = ops_abertas_edit.apply(
+                lambda r: f"{r['numero_op']} - {r['cliente']} ({formatar_data(r['data'])})", axis=1
+            ).tolist()
+            op_edit_label = st.selectbox("Selecione a OP", opcoes_edit, key="edit_op_sel")
+
+            if op_edit_label:
+                idx_edit = opcoes_edit.index(op_edit_label)
+                op_edit = ops_abertas_edit.iloc[idx_edit]
+                op_edit_id = op_edit["id"]
+                op_edit_num = op_edit["numero_op"]
+
+                st.markdown(f"**OP:** {op_edit_num} | **Cliente:** {op_edit['cliente']} | **Volume:** {op_edit['volume_ton']} ton")
+
+                try:
+                    df_nfs_edit = read_sheet_no_cache("op_lavacao_nfs")
+                    if not df_nfs_edit.empty:
+                        nfs_edit = df_nfs_edit[df_nfs_edit["op_lavacao_id"].astype(str) == str(op_edit_id)]
+                    else:
+                        nfs_edit = pd.DataFrame()
+                except Exception:
+                    nfs_edit = pd.DataFrame()
+
+                if not nfs_edit.empty:
+                    st.caption("NFs ja cadastradas:")
+                    cols_show = ["nf_apara", "fornecedor", "tipo_fardo", "quant_fardos", "peso_kg", "obs"]
+                    cols_ok = [c for c in cols_show if c in nfs_edit.columns]
+                    st.dataframe(nfs_edit[cols_ok], use_container_width=True, hide_index=True)
+
+                st.divider()
+                st.subheader("Adicionar nova NF")
+
+                with st.form("form_edit_nf", clear_on_submit=True):
+                    col_e1, col_e2, col_e3 = st.columns(3)
+                    with col_e1:
+                        edit_nf = st.text_input("NF Apara", key="edit_nf_apara")
+                        edit_fornec = st.text_input("Fornecedor", key="edit_fornec")
+                    with col_e2:
+                        edit_tipo = st.selectbox("Tipo de Fardo", ["Fardinho", "Fardao"], key="edit_tipo")
+                        edit_qtd = st.number_input("Quantidade de Fardos", min_value=0, step=1, key="edit_qtd")
+                    with col_e3:
+                        edit_peso = st.number_input("Peso (kg)", min_value=0.0, step=0.5, format="%.1f", key="edit_peso")
+                        edit_obs = st.text_input("Observacao", key="edit_obs")
+
+                    edit_submit = st.form_submit_button("Adicionar NF", type="primary", use_container_width=True)
+
+                if edit_submit:
+                    erros_edit = []
+                    if not edit_nf.strip():
+                        erros_edit.append("NF Apara e obrigatoria.")
+                    if edit_qtd <= 0:
+                        erros_edit.append("Quantidade deve ser maior que zero.")
+                    if edit_peso <= 0:
+                        erros_edit.append("Peso deve ser maior que zero.")
+
+                    if erros_edit:
+                        for e in erros_edit:
+                            st.error(e)
+                    else:
+                        try:
+                            nf_nova = {
+                                "op_lavacao_id": str(op_edit_id),
+                                "nf_apara": edit_nf.strip(),
+                                "fornecedor": edit_fornec.strip(),
+                                "tipo_fardo": edit_tipo,
+                                "quant_fardos": edit_qtd,
+                                "peso_kg": edit_peso,
+                                "obs": edit_obs.strip(),
+                            }
+                            append_row("op_lavacao_nfs", nf_nova)
+                            st.toast("NF adicionada com sucesso!")
+                            st.success(f"NF **{edit_nf}** adicionada a OP **{op_edit_num}**.")
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"Erro ao adicionar NF: {exc}")
+
+# ===========================================================================
+# TAB 3: Acompanhamento
 # ===========================================================================
 with tab_acompanhamento:
     st.subheader("Acompanhamento de OP em Andamento")
@@ -320,14 +413,31 @@ with tab_acompanhamento:
                         st.progress(progresso_barra, text=f"Progresso: {perc_geral:.1f}%")
 
                         if perc_geral >= 100:
-                            st.success("OP 100% concluida!")
+                            st.success("OP 100% concluida! Voce pode fechar esta OP.")
                         elif perc_geral > 0:
                             st.info(f"OP em andamento - {perc_geral:.1f}% concluido.")
                         else:
                             st.warning("Producao ainda nao iniciada para esta OP.")
 
+                        # Botao de fechamento
+                        st.divider()
+                        st.subheader("Fechar OP")
+                        if perc_geral >= 100:
+                            st.caption("Toda a producao planejada foi concluida.")
+                        else:
+                            st.caption(f"Atencao: a OP esta com {perc_geral:.1f}% concluido. Fechar antes de 100% encerrara a OP com producao parcial.")
+
+                        if st.button(f"Fechar OP {numero_op_sel}", type="primary", key="btn_fechar_op"):
+                            try:
+                                update_rows("op_lavacao", "id", [str(op_id_sel)], "status", "fechada")
+                                st.toast("OP fechada com sucesso!")
+                                st.success(f"OP **{numero_op_sel}** fechada. Producao final: {formatar_peso(total_peso_real)} ({perc_geral:.1f}%)")
+                                st.rerun()
+                            except Exception as exc:
+                                st.error(f"Erro ao fechar OP: {exc}")
+
 # ===========================================================================
-# TAB 3: Consultar OPs
+# TAB 4: Consultar OPs
 # ===========================================================================
 with tab_consultar:
     st.subheader("Consultar Ordens de Producao")
