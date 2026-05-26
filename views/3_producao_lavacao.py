@@ -58,6 +58,25 @@ with tab_lancamento:
             st.warning("Nenhuma OP aberta encontrada.")
             numero_op = st.text_input("Numero da OP (manual)", key="op_lancamento_manual")
 
+    nfs_da_op = []
+    if numero_op:
+        try:
+            df_ops = read_sheet("op_lavacao")
+            df_nfs_all = read_sheet("op_lavacao_nfs")
+            if not df_ops.empty and not df_nfs_all.empty:
+                op_row = df_ops[df_ops["numero_op"] == numero_op]
+                if not op_row.empty:
+                    op_id = op_row.iloc[0]["id"]
+                    nfs_desta_op = df_nfs_all[df_nfs_all["op_lavacao_id"] == str(op_id)]
+                    if not nfs_desta_op.empty:
+                        for _, nf_row in nfs_desta_op.iterrows():
+                            nfs_da_op.append(f"{nf_row['nf_apara']} ({nf_row['peso_kg']} kg)")
+        except Exception:
+            pass
+
+    if numero_op and not nfs_da_op:
+        st.warning("Nenhuma NF cadastrada nesta OP. Cadastre as NFs na tela de OP Lavacao.")
+
     st.divider()
 
     # -----------------------------------------------------------------------
@@ -67,7 +86,10 @@ with tab_lancamento:
     with st.form("form_fardinhos", clear_on_submit=True):
         col_f1, col_f2, col_f3 = st.columns(3)
         with col_f1:
-            nf_fardinho = st.text_input("NF", key="nf_fardinho")
+            if nfs_da_op:
+                nf_fardinho = st.selectbox("NF", options=nfs_da_op, key="nf_fardinho")
+            else:
+                nf_fardinho = st.text_input("NF", key="nf_fardinho")
         with col_f2:
             qtd_fardinho = st.number_input("Quantidade", min_value=0, step=1, key="qtd_fardinho")
         with col_f3:
@@ -92,12 +114,13 @@ with tab_lancamento:
                 st.error(e)
         else:
             try:
+                nf_fardinho_limpo = nf_fardinho.split(" (")[0].strip() if nf_fardinho else ""
                 dados_fardinho = {
                     "data": data_prod.isoformat(),
                     "turno": turno,
                     "numero_op": op_val,
                     "tipo_fardo": "fardinho",
-                    "nf": nf_fardinho.strip(),
+                    "nf": nf_fardinho_limpo,
                     "quantidade": qtd_fardinho,
                     "peso_kg": peso_fardinho,
                     "perda_lixo_kg": 0,
@@ -150,7 +173,10 @@ with tab_lancamento:
     with st.form("form_fardoes", clear_on_submit=True):
         col_g1, col_g2, col_g3 = st.columns(3)
         with col_g1:
-            nf_fardao = st.text_input("NF", key="nf_fardao")
+            if nfs_da_op:
+                nf_fardao = st.selectbox("NF", options=nfs_da_op, key="nf_fardao")
+            else:
+                nf_fardao = st.text_input("NF", key="nf_fardao")
         with col_g2:
             qtd_fardao = st.number_input("Quantidade", min_value=0, step=1, key="qtd_fardao")
         with col_g3:
@@ -175,12 +201,13 @@ with tab_lancamento:
                 st.error(e)
         else:
             try:
+                nf_fardao_limpo = nf_fardao.split(" (")[0].strip() if nf_fardao else ""
                 dados_fardao = {
                     "data": data_prod.isoformat(),
                     "turno": turno,
                     "numero_op": op_val,
                     "tipo_fardo": "fardao",
-                    "nf": nf_fardao.strip(),
+                    "nf": nf_fardao_limpo,
                     "quantidade": qtd_fardao,
                     "peso_kg": peso_fardao,
                     "perda_lixo_kg": 0,
