@@ -13,9 +13,6 @@ try:
 except ImportError:
     gerar_pdf_op_lavacao = None
 
-# ---------------------------------------------------------------------------
-# Titulo
-# ---------------------------------------------------------------------------
 st.header("Ordem de Producao - Lavacao")
 
 tab_nova, tab_consultar = st.tabs(["Nova OP", "Consultar OPs"])
@@ -26,24 +23,99 @@ tab_nova, tab_consultar = st.tabs(["Nova OP", "Consultar OPs"])
 with tab_nova:
     st.subheader("Criar nova Ordem de Producao")
 
-    with st.form("form_nova_op", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            numero_op = proximo_sequencial("op_lavacao", "numero_op", "OPL")
-            st.info(f"Numero da OP: **{numero_op}**")
-            data_op = st.date_input("Data", value=date.today())
-            responsavel = st.text_input("Responsavel")
-            cliente = st.text_input("Cliente")
-        with col2:
-            volume_ton = st.number_input("Volume (ton)", min_value=0.0, step=0.5, format="%.1f")
-            produto = st.text_input("Produto")
-            indice_fluidez = st.text_input("Indice de Fluidez")
-            observacao = st.text_area("Observacao")
+    numero_op = proximo_sequencial("op_lavacao", "numero_op", "OPL")
+    st.info(f"Numero da OP: **{numero_op}**")
 
-        submitted = st.form_submit_button("Criar OP", type="primary", use_container_width=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        data_op = st.date_input("Data", value=date.today(), key="op_lav_data")
+        responsavel = st.text_input("Responsavel", key="op_lav_resp")
+        cliente = st.text_input("Cliente", key="op_lav_cliente")
+    with col2:
+        volume_ton = st.number_input("Volume (ton)", min_value=0.0, step=0.5, format="%.1f", key="op_lav_vol")
+        produto = st.text_input("Produto", key="op_lav_prod")
+        indice_fluidez = st.text_input("Indice de Fluidez", key="op_lav_mfi")
 
-    if submitted:
-        # Validacoes basicas
+    observacao = st.text_area("Observacao", key="op_lav_obs")
+
+    # -----------------------------------------------------------------------
+    # Secao: NFs da OP
+    # -----------------------------------------------------------------------
+    st.divider()
+    st.subheader("Notas Fiscais de Apara")
+    st.caption("Adicione as NFs que serao consumidas nesta OP antes de criar.")
+
+    if "nfs_temp" not in st.session_state:
+        st.session_state.nfs_temp = []
+
+    with st.form("form_add_nf", clear_on_submit=True):
+        col_nf1, col_nf2, col_nf3 = st.columns(3)
+        with col_nf1:
+            nf_apara = st.text_input("NF Apara")
+            fornecedor = st.text_input("Fornecedor")
+        with col_nf2:
+            quant_fardos = st.number_input("Quantidade de Fardos", min_value=0, step=1)
+            peso_kg = st.number_input("Peso (kg)", min_value=0.0, step=0.5, format="%.1f")
+        with col_nf3:
+            obs_nf = st.text_input("Observacao da NF")
+
+        add_nf = st.form_submit_button("Adicionar NF a lista", use_container_width=True)
+
+    if add_nf:
+        erros_nf = []
+        if not nf_apara.strip():
+            erros_nf.append("NF Apara e obrigatoria.")
+        if quant_fardos <= 0:
+            erros_nf.append("Quantidade de fardos deve ser maior que zero.")
+        if peso_kg <= 0:
+            erros_nf.append("Peso deve ser maior que zero.")
+
+        if erros_nf:
+            for e in erros_nf:
+                st.error(e)
+        else:
+            st.session_state.nfs_temp.append({
+                "nf_apara": nf_apara.strip(),
+                "fornecedor": fornecedor.strip(),
+                "quant_fardos": quant_fardos,
+                "peso_kg": peso_kg,
+                "obs": obs_nf.strip(),
+            })
+            st.toast(f"NF {nf_apara} adicionada a lista!")
+            st.rerun()
+
+    if st.session_state.nfs_temp:
+        df_nfs_temp = pd.DataFrame(st.session_state.nfs_temp)
+        st.dataframe(
+            df_nfs_temp[["nf_apara", "fornecedor", "quant_fardos", "peso_kg", "obs"]],
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "nf_apara": "NF Apara",
+                "fornecedor": "Fornecedor",
+                "quant_fardos": "Qtd Fardos",
+                "peso_kg": "Peso (kg)",
+                "obs": "Obs",
+            },
+        )
+        peso_total = sum(nf["peso_kg"] for nf in st.session_state.nfs_temp)
+        total_fardos = sum(nf["quant_fardos"] for nf in st.session_state.nfs_temp)
+        col_t1, col_t2, col_t3 = st.columns(3)
+        col_t1.metric("NFs adicionadas", len(st.session_state.nfs_temp))
+        col_t2.metric("Total Fardos", total_fardos)
+        col_t3.metric("Peso Total", formatar_peso(peso_total))
+
+        if st.button("Limpar lista de NFs"):
+            st.session_state.nfs_temp = []
+            st.rerun()
+    else:
+        st.warning("Nenhuma NF adicionada ainda. Adicione pelo menos uma NF antes de criar a OP.")
+
+    # -----------------------------------------------------------------------
+    # Botao: Criar OP
+    # -----------------------------------------------------------------------
+    st.divider()
+    if st.button("Criar OP", type="primary", use_container_width=True):
         erros = []
         if not responsavel.strip():
             erros.append("Responsavel e obrigatorio.")
@@ -51,6 +123,8 @@ with tab_nova:
             erros.append("Cliente e obrigatorio.")
         if volume_ton <= 0:
             erros.append("Volume deve ser maior que zero.")
+        if not st.session_state.nfs_temp:
+            erros.append("Adicione pelo menos uma NF antes de criar a OP.")
 
         if erros:
             for e in erros:
@@ -58,7 +132,7 @@ with tab_nova:
         else:
             try:
                 op_data = {
-                    "numero_op": numero_op.strip(),
+                    "numero_op": numero_op,
                     "data": data_op.isoformat(),
                     "responsavel": responsavel.strip(),
                     "cliente": cliente.strip(),
@@ -69,92 +143,38 @@ with tab_nova:
                     "observacao": observacao.strip(),
                 }
                 resultado = append_row("op_lavacao", op_data)
-                st.session_state["op_criada_id"] = resultado["id"]
-                st.session_state["op_criada_numero"] = numero_op.strip()
-                st.toast("OP criada com sucesso!")
-                st.success(f"OP **{numero_op}** criada com sucesso! ID: `{resultado['id']}`")
+                op_id = resultado["id"]
 
-                # Botao para baixar PDF da OP recem-criada
+                nfs_salvas = []
+                for nf in st.session_state.nfs_temp:
+                    nf_data = {
+                        "op_lavacao_id": op_id,
+                        "nf_apara": nf["nf_apara"],
+                        "fornecedor": nf["fornecedor"],
+                        "quant_fardos": nf["quant_fardos"],
+                        "peso_kg": nf["peso_kg"],
+                        "obs": nf["obs"],
+                    }
+                    append_row("op_lavacao_nfs", nf_data)
+                    nfs_salvas.append(nf_data)
+
+                st.session_state.nfs_temp = []
+                st.toast("OP criada com sucesso!")
+                st.success(f"OP **{numero_op}** criada com {len(nfs_salvas)} NFs vinculadas!")
+
                 if gerar_pdf_op_lavacao is not None:
                     try:
-                        pdf_bytes = gerar_pdf_op_lavacao(op_data, [])
+                        pdf_bytes = gerar_pdf_op_lavacao(op_data, nfs_salvas)
                         st.download_button(
                             "Baixar PDF da OP",
                             pdf_bytes,
-                            file_name=f"{numero_op.strip()}.pdf",
+                            file_name=f"{numero_op}.pdf",
                             mime="application/pdf",
                         )
                     except Exception:
                         pass
             except Exception as exc:
                 st.error(f"Erro ao criar OP: {exc}")
-
-    # -----------------------------------------------------------------------
-    # Secao para adicionar NFs apos criacao da OP
-    # -----------------------------------------------------------------------
-    if "op_criada_id" in st.session_state:
-        st.divider()
-        st.subheader(f"Adicionar NFs a OP {st.session_state.get('op_criada_numero', '')}")
-
-        with st.form("form_add_nf", clear_on_submit=True):
-            col_nf1, col_nf2 = st.columns(2)
-            with col_nf1:
-                nf_apara = st.text_input("NF Apara")
-                fornecedor = st.text_input("Fornecedor")
-                quant_fardos = st.number_input("Quantidade de Fardos", min_value=0, step=1)
-            with col_nf2:
-                peso_kg = st.number_input("Peso (kg)", min_value=0.0, step=0.5, format="%.1f")
-                obs_nf = st.text_input("Observacao da NF")
-
-            add_nf = st.form_submit_button("Adicionar NF", use_container_width=True)
-
-        if add_nf:
-            erros_nf = []
-            if not nf_apara.strip():
-                erros_nf.append("NF Apara e obrigatoria.")
-            if quant_fardos <= 0:
-                erros_nf.append("Quantidade de fardos deve ser maior que zero.")
-            if peso_kg <= 0:
-                erros_nf.append("Peso deve ser maior que zero.")
-
-            if erros_nf:
-                for e in erros_nf:
-                    st.error(e)
-            else:
-                try:
-                    nf_data = {
-                        "op_lavacao_id": st.session_state["op_criada_id"],
-                        "nf_apara": nf_apara.strip(),
-                        "fornecedor": fornecedor.strip(),
-                        "quant_fardos": quant_fardos,
-                        "peso_kg": peso_kg,
-                        "obs": obs_nf.strip(),
-                    }
-                    append_row("op_lavacao_nfs", nf_data)
-                    st.toast("NF adicionada com sucesso!")
-                    st.success(f"NF **{nf_apara}** adicionada.")
-                except Exception as exc:
-                    st.error(f"Erro ao adicionar NF: {exc}")
-
-        # Mostrar NFs ja adicionadas
-        try:
-            df_nfs = read_sheet_no_cache("op_lavacao_nfs")
-            if not df_nfs.empty:
-                nfs_op = df_nfs[df_nfs["op_lavacao_id"] == st.session_state["op_criada_id"]]
-                if not nfs_op.empty:
-                    st.caption("NFs adicionadas a esta OP:")
-                    st.dataframe(
-                        nfs_op[["nf_apara", "fornecedor", "quant_fardos", "peso_kg", "obs"]],
-                        use_container_width=True,
-                        hide_index=True,
-                    )
-        except Exception:
-            pass
-
-        if st.button("Finalizar adicao de NFs"):
-            del st.session_state["op_criada_id"]
-            del st.session_state["op_criada_numero"]
-            st.rerun()
 
 # ===========================================================================
 # TAB: Consultar OPs
@@ -185,7 +205,6 @@ with tab_consultar:
     if df_ops.empty:
         st.info("Nenhuma OP encontrada.")
     else:
-        # Converter coluna data para comparacao
         df_ops["data_dt"] = pd.to_datetime(df_ops["data"], errors="coerce").dt.date
         mask = (df_ops["data_dt"] >= data_inicio) & (df_ops["data_dt"] <= data_fim)
         df_filtrado = df_ops[mask].copy()
@@ -193,7 +212,6 @@ with tab_consultar:
         if df_filtrado.empty:
             st.info("Nenhuma OP encontrada no periodo selecionado.")
         else:
-            # Formatar para exibicao
             df_exibir = df_filtrado[
                 ["numero_op", "data", "responsavel", "cliente", "volume_ton",
                  "produto", "indice_fluidez", "status", "observacao"]
@@ -202,7 +220,6 @@ with tab_consultar:
 
             st.dataframe(df_exibir, use_container_width=True, hide_index=True)
 
-            # Detalhes expandiveis com NFs
             st.subheader("Detalhes das OPs")
             try:
                 df_nfs_all = read_sheet("op_lavacao_nfs")
@@ -210,7 +227,7 @@ with tab_consultar:
                 df_nfs_all = pd.DataFrame()
 
             for _, row in df_filtrado.iterrows():
-                with st.expander(f"OP {row['numero_op']} - {formatar_data(row['data'])} - Status: {row['status']}"):
+                with st.expander(f"OP {row['numero_op']} - {formatar_data(row['data'])} - {row['status']}"):
                     col_det1, col_det2, col_det3 = st.columns(3)
                     with col_det1:
                         st.markdown(f"**Responsavel:** {row['responsavel']}")
@@ -227,8 +244,10 @@ with tab_consultar:
                         nfs_desta_op = df_nfs_all[df_nfs_all["op_lavacao_id"] == row["id"]]
                         if not nfs_desta_op.empty:
                             st.caption("Notas Fiscais vinculadas:")
+                            cols_nf = ["nf_apara", "fornecedor", "quant_fardos", "peso_kg", "obs"]
+                            cols_presentes = [c for c in cols_nf if c in nfs_desta_op.columns]
                             st.dataframe(
-                                nfs_desta_op[["nf_apara", "quant_fardos", "peso_kg", "obs"]],
+                                nfs_desta_op[cols_presentes],
                                 use_container_width=True,
                                 hide_index=True,
                             )
@@ -238,7 +257,6 @@ with tab_consultar:
                     else:
                         st.caption("Nenhuma NF vinculada a esta OP.")
 
-                    # Botao para baixar PDF da OP
                     if gerar_pdf_op_lavacao is not None:
                         try:
                             op_dict = row.to_dict()
