@@ -87,9 +87,16 @@ def fazer_logout():
     st.session_state.perfil = None
 
 
+LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo.png")
+
 if not st.session_state.logado:
-    st.markdown("## Resiban")
-    st.markdown("**Sistema de Gestao de Producao**")
+    col_logo, col_title = st.columns([1, 2])
+    with col_logo:
+        if os.path.exists(LOGO_PATH):
+            st.image(LOGO_PATH, width=180)
+    with col_title:
+        st.markdown("## Resiban")
+        st.markdown("**Sistema de Gestao de Producao**")
     st.markdown("---")
 
     with st.form("login"):
@@ -117,7 +124,8 @@ else:
         "qualidade": "Qualidade",
     }
 
-    st.sidebar.markdown("## Resiban")
+    if os.path.exists(LOGO_PATH):
+        st.sidebar.image(LOGO_PATH, width=150)
     st.sidebar.markdown(f"**{nomes_perfil[perfil]}**")
     st.sidebar.markdown("---")
 
