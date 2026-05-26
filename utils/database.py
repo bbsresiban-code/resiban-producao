@@ -94,6 +94,28 @@ def update_rows(worksheet_name: str, match_col: str, match_values: list,
     st.cache_data.clear()
 
 
+def proximo_sequencial(worksheet_name: str, coluna: str, prefixo: str) -> str:
+    df = read_sheet_no_cache(worksheet_name)
+    if df.empty or coluna not in df.columns:
+        return f"{prefixo}-0001"
+    valores = df[coluna].astype(str)
+    valores = valores[valores.str.startswith(prefixo)]
+    if valores.empty:
+        return f"{prefixo}-0001"
+    numeros = []
+    for v in valores:
+        partes = v.rsplit("-", 1)
+        if len(partes) == 2:
+            try:
+                numeros.append(int(partes[1]))
+            except ValueError:
+                pass
+    if not numeros:
+        return f"{prefixo}-0001"
+    proximo = max(numeros) + 1
+    return f"{prefixo}-{proximo:04d}"
+
+
 def init_spreadsheet():
     sp = get_spreadsheet()
     existing = [ws.title for ws in sp.worksheets()]
@@ -134,9 +156,9 @@ def init_spreadsheet():
     for ws_name, headers in headers_map.items():
         if ws_name not in existing:
             ws = sp.add_worksheet(title=ws_name, rows=1000, cols=len(headers))
-            ws.update("A1", [headers])
+            ws.update(values=[headers], range_name="A1")
         else:
             ws = sp.worksheet(ws_name)
             current = ws.row_values(1)
             if not current:
-                ws.update("A1", [headers])
+                ws.update(values=[headers], range_name="A1")

@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date, datetime, timedelta
 
-from utils.database import read_sheet, read_sheet_no_cache, append_row
+from utils.database import read_sheet, read_sheet_no_cache, append_row, proximo_sequencial
 from utils.formatters import formatar_data, formatar_peso
 
 # ---------------------------------------------------------------------------
@@ -24,7 +24,8 @@ with tab_nova:
     with st.form("form_nova_op", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
-            numero_op = st.text_input("Numero da OP")
+            numero_op = proximo_sequencial("op_lavacao", "numero_op", "OPL")
+            st.info(f"Numero da OP: **{numero_op}**")
             data_op = st.date_input("Data", value=date.today())
             responsavel = st.text_input("Responsavel")
             cliente = st.text_input("Cliente")
@@ -39,8 +40,6 @@ with tab_nova:
     if submitted:
         # Validacoes basicas
         erros = []
-        if not numero_op.strip():
-            erros.append("Numero da OP e obrigatorio.")
         if not responsavel.strip():
             erros.append("Responsavel e obrigatorio.")
         if not cliente.strip():

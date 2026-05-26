@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date, datetime
 
-from utils.database import read_sheet, append_row, update_rows, read_sheet_no_cache
+from utils.database import read_sheet, append_row, update_rows, read_sheet_no_cache, proximo_sequencial
 from utils.formatters import EXTRUSORAS, formatar_peso, formatar_data, formatar_percentual
 
 st.title("OP Extrusao")
@@ -22,10 +22,8 @@ with tab_nova:
         col1, col2 = st.columns(2)
 
         with col1:
-            numero_op = st.text_input(
-                "Numero da OP",
-                help="Prefixo: A = Canela | B = Servico | C = Reticulado",
-            )
+            numero_op = proximo_sequencial("op_extrusao", "numero_op", "OPE")
+            st.info(f"Numero da OP: **{numero_op}**")
             data_op = st.date_input("Data", value=date.today())
             responsavel = st.text_input("Responsavel")
             cliente = st.text_input("Cliente")
@@ -43,8 +41,6 @@ with tab_nova:
 
         if submitted:
             erros = []
-            if not numero_op.strip():
-                erros.append("Numero da OP e obrigatorio.")
             if not responsavel.strip():
                 erros.append("Responsavel e obrigatorio.")
 

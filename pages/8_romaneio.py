@@ -11,6 +11,7 @@ from utils.database import (
     append_row,
     append_rows,
     update_rows,
+    proximo_sequencial,
 )
 from utils.formatters import formatar_data, formatar_peso
 
@@ -35,7 +36,8 @@ with tab_novo:
     col_h1, col_h2 = st.columns(2)
     with col_h1:
         rom_data = st.date_input("Data", value=date.today(), key="rom_data")
-        rom_numero_pedido = st.text_input("Numero do Pedido", key="rom_numero_pedido")
+        rom_numero_pedido = proximo_sequencial("romaneio", "numero_pedido", "ROM")
+        st.info(f"Numero do Romaneio: **{rom_numero_pedido}**")
         rom_cliente = st.text_input("Cliente", key="rom_cliente")
         rom_transportadora = st.text_input("Transportadora", key="rom_transportadora")
     with col_h2:
