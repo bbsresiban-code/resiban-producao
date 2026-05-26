@@ -143,36 +143,38 @@ def gerar_pdf_op_lavacao(op_data: dict, nfs: list[dict]) -> bytes:
     _add_field(pdf, "Data", op_data.get("data", ""))
     _add_field(pdf, "Responsavel", op_data.get("responsavel", ""))
     _add_field(pdf, "Cliente", op_data.get("cliente", ""))
-    _add_field(pdf, "Volume (ton)", op_data.get("volume", ""))
+    _add_field(pdf, "Volume (ton)", op_data.get("volume_ton", op_data.get("volume", "")))
     _add_field(pdf, "Produto", op_data.get("produto", ""))
     _add_field(pdf, "Indice de Fluidez", op_data.get("indice_fluidez", ""))
     _add_field(pdf, "Observacao", op_data.get("observacao", ""))
 
     pdf.ln(4)
 
-    # Tabela de NFs
     _section_title(pdf, "Notas Fiscais de Apara")
 
-    headers = ["NF Apara", "Quant Fardos", "Peso (kg)", "Obs"]
-    col_widths = [45, 35, 40, 60]
+    headers = ["NF Apara", "Fornecedor", "Qtd Fardos", "Peso (kg)", "Obs"]
+    col_widths = [35, 40, 25, 30, 50]
     rows = []
     total_peso = 0.0
+    total_fardos = 0
     for nf in (nfs or []):
-        peso = nf.get("peso", 0) or 0
+        peso = nf.get("peso_kg", nf.get("peso", 0)) or 0
+        fardos = nf.get("quant_fardos", 0) or 0
         total_peso += float(peso)
+        total_fardos += int(fardos)
         rows.append([
             str(nf.get("nf_apara", "")),
-            str(nf.get("quant_fardos", "")),
+            str(nf.get("fornecedor", "")),
+            str(fardos),
             str(peso),
             str(nf.get("obs", "")),
         ])
 
     _add_table(pdf, headers, rows, col_widths)
 
-    # Total
     pdf.ln(3)
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 7, f"Total Peso: {total_peso:,.2f} kg", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, f"Total NFs: {len(nfs or [])} | Total Fardos: {total_fardos} | Peso Total: {total_peso:,.1f} kg", new_x="LMARGIN", new_y="NEXT")
 
     return _to_bytes(pdf)
 
@@ -205,37 +207,36 @@ def gerar_pdf_producao_lavacao(
     registros = registros or []
 
     # Fardinhos
-    fardinhos = [r for r in registros if str(r.get("tipo", "")).lower() == "fardinhos"]
+    fardinhos = [r for r in registros if str(r.get("tipo_fardo", r.get("tipo", ""))).lower() == "fardinho"]
     _section_title(pdf, "Fardinhos")
     headers_f = ["OP", "NF", "Quantidade", "Peso (kg)"]
     col_widths_f = [40, 45, 40, 55]
     rows_f = [
-        [str(r.get("op", "")), str(r.get("nf", "")),
-         str(r.get("quantidade", "")), str(r.get("peso", ""))]
+        [str(r.get("numero_op", r.get("op", ""))), str(r.get("nf", "")),
+         str(r.get("quantidade", "")), str(r.get("peso_kg", r.get("peso", "")))]
         for r in fardinhos
     ]
     _add_table(pdf, headers_f, rows_f, col_widths_f)
 
     # Fardoes
-    fardoes = [r for r in registros if str(r.get("tipo", "")).lower() == "fardoes"]
+    fardoes = [r for r in registros if str(r.get("tipo_fardo", r.get("tipo", ""))).lower() == "fardao"]
     _section_title(pdf, "Fardoes")
     rows_fd = [
-        [str(r.get("op", "")), str(r.get("nf", "")),
-         str(r.get("quantidade", "")), str(r.get("peso", ""))]
+        [str(r.get("numero_op", r.get("op", ""))), str(r.get("nf", "")),
+         str(r.get("quantidade", "")), str(r.get("peso_kg", r.get("peso", "")))]
         for r in fardoes
     ]
     _add_table(pdf, headers_f, rows_fd, col_widths_f)
 
     # Perdas
-    perdas = [r for r in registros if str(r.get("tipo", "")).lower() == "perdas"]
+    perdas = [r for r in registros if str(r.get("tipo_fardo", r.get("tipo", ""))).lower() == "perdas"]
     _section_title(pdf, "Perdas")
     if perdas:
         p = perdas[0]
-        _add_field(pdf, "Lixo (kg)", p.get("lixo", "0"))
-        _add_field(pdf, "Papelao (kg)", p.get("papelao", "0"))
-        _add_field(pdf, "Plastico Colorido (kg)", p.get("plastico_colorido", "0"))
-        _add_field(pdf, "Total Perda (kg)", p.get("total_perda", "0"))
-        _add_field(pdf, "% Perda", p.get("perc_perda", "0"))
+        _add_field(pdf, "Lixo (kg)", p.get("perda_lixo_kg", p.get("lixo", "0")))
+        _add_field(pdf, "Papelao (kg)", p.get("perda_papelao_kg", p.get("papelao", "0")))
+        _add_field(pdf, "Plastico Colorido (kg)", p.get("perda_plastico_colorido_kg", p.get("plastico_colorido", "0")))
+        _add_field(pdf, "Total Perda (kg)", p.get("perda_total_kg", p.get("total_perda", "0")))
     else:
         pdf.cell(0, 7, "Nenhuma perda registrada.", new_x="LMARGIN", new_y="NEXT")
 
@@ -243,12 +244,14 @@ def gerar_pdf_producao_lavacao(
     paradas = paradas or []
     _section_title(pdf, "Paradas")
     if paradas:
-        headers_p = ["Tipo", "Inicio", "Fim", "Duracao", "Obs"]
-        col_widths_p = [35, 30, 30, 30, 55]
+        headers_p = ["Tipo", "Inicio", "Fim", "Duracao (min)", "Obs"]
+        col_widths_p = [45, 25, 25, 30, 55]
         rows_p = [
-            [str(p.get("tipo", "")), str(p.get("inicio", "")),
-             str(p.get("fim", "")), str(p.get("duracao", "")),
-             str(p.get("obs", ""))]
+            [str(p.get("tipo_parada", p.get("tipo", ""))),
+             str(p.get("hora_inicio", p.get("inicio", ""))),
+             str(p.get("hora_fim", p.get("fim", ""))),
+             str(p.get("duracao_min", p.get("duracao", ""))),
+             str(p.get("observacao", p.get("obs", "")))]
             for p in paradas
         ]
         _add_table(pdf, headers_p, rows_p, col_widths_p)
@@ -278,7 +281,7 @@ def gerar_pdf_op_extrusao(op_data: dict, lotes: list[dict]) -> bytes:
     _add_field(pdf, "Data", op_data.get("data", ""))
     _add_field(pdf, "Responsavel", op_data.get("responsavel", ""))
     _add_field(pdf, "Cliente", op_data.get("cliente", ""))
-    _add_field(pdf, "Volume (ton)", op_data.get("volume", ""))
+    _add_field(pdf, "Volume (ton)", op_data.get("volume_ton", op_data.get("volume", "")))
     _add_field(pdf, "Produto", op_data.get("produto", ""))
     _add_field(pdf, "Maquina", op_data.get("maquina", ""))
     _add_field(pdf, "Coordenador", op_data.get("coordenador", ""))
@@ -294,10 +297,10 @@ def gerar_pdf_op_extrusao(op_data: dict, lotes: list[dict]) -> bytes:
     rows = []
     total_peso = 0.0
     for lote in (lotes or []):
-        peso = lote.get("peso", 0) or 0
+        peso = lote.get("peso_kg", lote.get("peso", 0)) or 0
         total_peso += float(peso)
         rows.append([
-            str(lote.get("lote", "")),
+            str(lote.get("codigo_lote", lote.get("lote", ""))),
             str(lote.get("extrusora", "")),
             str(peso),
         ])
@@ -355,9 +358,9 @@ def gerar_pdf_producao_extrusao(
     headers = ["Hora", "Lote", "Extrusora", "Peso (kg)", "OP", "Obs"]
     col_widths = [25, 35, 30, 30, 25, 35]
     rows = [
-        [str(r.get("hora", "")), str(r.get("lote", "")),
-         str(r.get("extrusora", "")), str(r.get("peso", "")),
-         str(r.get("op", "")), str(r.get("obs", ""))]
+        [str(r.get("hora", "")), str(r.get("codigo_lote", r.get("lote", ""))),
+         str(r.get("extrusora", "")), str(r.get("peso_kg", r.get("peso", ""))),
+         str(r.get("numero_op", r.get("op", ""))), str(r.get("observacao_lote", r.get("obs", "")))]
         for r in (registros or [])
     ]
     _add_table(pdf, headers, rows, col_widths)
@@ -399,9 +402,9 @@ def gerar_pdf_romaneio(romaneio: dict, itens: list[dict]) -> bytes:
     _add_field(pdf, "Data", romaneio.get("data", ""))
     _add_field(pdf, "Cliente", romaneio.get("cliente", ""))
     _add_field(pdf, "Transportadora", romaneio.get("transportadora", ""))
-    _add_field(pdf, "Placa", romaneio.get("placa", ""))
+    _add_field(pdf, "Placa", romaneio.get("placa_veiculo", romaneio.get("placa", "")))
     _add_field(pdf, "Motorista", romaneio.get("motorista", ""))
-    _add_field(pdf, "Responsavel", romaneio.get("responsavel", ""))
+    _add_field(pdf, "Responsavel", romaneio.get("responsavel_carregamento", romaneio.get("responsavel", "")))
 
     pdf.ln(4)
 
@@ -412,10 +415,10 @@ def gerar_pdf_romaneio(romaneio: dict, itens: list[dict]) -> bytes:
     rows = []
     total_peso = 0.0
     for item in (itens or []):
-        peso = item.get("peso", 0) or 0
+        peso = item.get("peso_kg", item.get("peso", 0)) or 0
         total_peso += float(peso)
         rows.append([
-            str(item.get("lote", "")),
+            str(item.get("codigo_lote", item.get("lote", ""))),
             str(item.get("produto", "")),
             str(peso),
         ])
@@ -487,7 +490,7 @@ def gerar_pdf_laudo_tecnico(romaneio: dict, itens_qualidade: list[dict]) -> byte
 
     rows = [
         [
-            str(item.get("lote", "")),
+            str(item.get("codigo_lote", item.get("lote", ""))),
             str(item.get("grade", "")),
             str(item.get("cor", "")),
             str(item.get("mfi", "")),
