@@ -6,8 +6,11 @@ Todos os textos em Portugues (BR).
 Utiliza fpdf2 para geracao dos documentos.
 """
 
+import os
 from fpdf import FPDF
 from io import BytesIO
+
+LOGO_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "logo.png")
 
 
 # ---------------------------------------------------------------------------
@@ -25,11 +28,24 @@ def _create_pdf() -> FPDF:
 
 
 def _header(pdf: FPDF, title: str) -> None:
-    """Adiciona cabecalho padrao: empresa, grupo e titulo do documento."""
-    pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 8, "RESIBAN - Resinas Bandeirante LTDA", align="C", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font("Helvetica", "", 11)
-    pdf.cell(0, 6, "Grupo CRB", align="C", new_x="LMARGIN", new_y="NEXT")
+    """Adiciona cabecalho padrao: logo, empresa, grupo e titulo do documento."""
+    if os.path.exists(LOGO_PATH):
+        logo_x = pdf.l_margin
+        logo_y = pdf.get_y()
+        pdf.image(LOGO_PATH, x=logo_x, y=logo_y, w=35)
+        text_x = logo_x + 40
+        pdf.set_xy(text_x, logo_y)
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.cell(pdf.w - pdf.r_margin - text_x, 8, "RESIBAN - Resinas Bandeirante LTDA", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_x(text_x)
+        pdf.set_font("Helvetica", "", 11)
+        pdf.cell(pdf.w - pdf.r_margin - text_x, 6, "Grupo CRB", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_y(logo_y + 25)
+    else:
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.cell(0, 8, "RESIBAN - Resinas Bandeirante LTDA", align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", "", 11)
+        pdf.cell(0, 6, "Grupo CRB", align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 14)
     pdf.cell(0, 8, title, align="C", new_x="LMARGIN", new_y="NEXT")
