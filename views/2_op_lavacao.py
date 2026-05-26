@@ -3,7 +3,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
 import pandas as pd
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 from utils.database import read_sheet, read_sheet_no_cache, append_row, proximo_sequencial
 from utils.formatters import formatar_data, formatar_peso
@@ -15,10 +15,10 @@ except ImportError:
 
 st.header("Ordem de Producao - Lavacao")
 
-tab_nova, tab_consultar = st.tabs(["Nova OP", "Consultar OPs"])
+tab_nova, tab_acompanhamento, tab_consultar = st.tabs(["Nova OP", "Acompanhamento", "Consultar OPs"])
 
 # ===========================================================================
-# TAB: Nova OP
+# TAB 1: Nova OP
 # ===========================================================================
 with tab_nova:
     st.subheader("Criar nova Ordem de Producao")
@@ -54,9 +54,10 @@ with tab_nova:
             nf_apara = st.text_input("NF Apara")
             fornecedor = st.text_input("Fornecedor")
         with col_nf2:
+            tipo_fardo = st.selectbox("Tipo de Fardo", ["Fardinho", "Fardao"])
             quant_fardos = st.number_input("Quantidade de Fardos", min_value=0, step=1)
-            peso_kg = st.number_input("Peso (kg)", min_value=0.0, step=0.5, format="%.1f")
         with col_nf3:
+            peso_kg = st.number_input("Peso (kg)", min_value=0.0, step=0.5, format="%.1f")
             obs_nf = st.text_input("Observacao da NF")
 
         add_nf = st.form_submit_button("Adicionar NF a lista", use_container_width=True)
@@ -77,6 +78,7 @@ with tab_nova:
             st.session_state.nfs_temp.append({
                 "nf_apara": nf_apara.strip(),
                 "fornecedor": fornecedor.strip(),
+                "tipo_fardo": tipo_fardo,
                 "quant_fardos": quant_fardos,
                 "peso_kg": peso_kg,
                 "obs": obs_nf.strip(),
@@ -87,12 +89,13 @@ with tab_nova:
     if st.session_state.nfs_temp:
         df_nfs_temp = pd.DataFrame(st.session_state.nfs_temp)
         st.dataframe(
-            df_nfs_temp[["nf_apara", "fornecedor", "quant_fardos", "peso_kg", "obs"]],
+            df_nfs_temp[["nf_apara", "fornecedor", "tipo_fardo", "quant_fardos", "peso_kg", "obs"]],
             use_container_width=True,
             hide_index=True,
             column_config={
                 "nf_apara": "NF Apara",
                 "fornecedor": "Fornecedor",
+                "tipo_fardo": "Tipo",
                 "quant_fardos": "Qtd Fardos",
                 "peso_kg": "Peso (kg)",
                 "obs": "Obs",
@@ -151,6 +154,7 @@ with tab_nova:
                         "op_lavacao_id": op_id,
                         "nf_apara": nf["nf_apara"],
                         "fornecedor": nf["fornecedor"],
+                        "tipo_fardo": nf["tipo_fardo"],
                         "quant_fardos": nf["quant_fardos"],
                         "peso_kg": nf["peso_kg"],
                         "obs": nf["obs"],
@@ -177,7 +181,153 @@ with tab_nova:
                 st.error(f"Erro ao criar OP: {exc}")
 
 # ===========================================================================
-# TAB: Consultar OPs
+# TAB 2: Acompanhamento
+# ===========================================================================
+with tab_acompanhamento:
+    st.subheader("Acompanhamento de OP em Andamento")
+
+    try:
+        df_ops_acomp = read_sheet_no_cache("op_lavacao")
+    except Exception:
+        df_ops_acomp = pd.DataFrame()
+
+    if df_ops_acomp.empty:
+        st.info("Nenhuma OP cadastrada.")
+    else:
+        ops_abertas = df_ops_acomp[df_ops_acomp["status"] == "aberta"].copy()
+
+        if ops_abertas.empty:
+            st.info("Nenhuma OP com status 'aberta' encontrada.")
+        else:
+            opcoes_ops = ops_abertas.apply(
+                lambda r: f"{r['numero_op']} - {r['cliente']} ({formatar_data(r['data'])})", axis=1
+            ).tolist()
+
+            op_selecionada_label = st.selectbox("Selecione a OP", opcoes_ops, key="acomp_op_sel")
+
+            if op_selecionada_label:
+                idx_sel = opcoes_ops.index(op_selecionada_label)
+                op_sel = ops_abertas.iloc[idx_sel]
+                op_id_sel = op_sel["id"]
+                numero_op_sel = op_sel["numero_op"]
+
+                st.markdown(f"**OP:** {numero_op_sel} | **Cliente:** {op_sel['cliente']} | **Volume:** {op_sel['volume_ton']} ton | **Produto:** {op_sel['produto']}")
+
+                # Carregar NFs da OP
+                try:
+                    df_nfs_acomp = read_sheet_no_cache("op_lavacao_nfs")
+                except Exception:
+                    df_nfs_acomp = pd.DataFrame()
+
+                # Carregar producao lavacao
+                try:
+                    df_prod = read_sheet_no_cache("producao_lavacao")
+                except Exception:
+                    df_prod = pd.DataFrame()
+
+                if df_nfs_acomp.empty:
+                    st.warning("Nenhuma NF encontrada para esta OP.")
+                else:
+                    nfs_da_op = df_nfs_acomp[df_nfs_acomp["op_lavacao_id"] == op_id_sel].copy()
+
+                    if nfs_da_op.empty:
+                        st.warning("Nenhuma NF vinculada a esta OP.")
+                    else:
+                        # Filtrar producao pela OP
+                        if not df_prod.empty and "numero_op" in df_prod.columns:
+                            prod_da_op = df_prod[df_prod["numero_op"] == numero_op_sel].copy()
+                        else:
+                            prod_da_op = pd.DataFrame()
+
+                        # Construir tabela de acompanhamento
+                        linhas_acomp = []
+                        total_qtd_plan = 0
+                        total_qtd_real = 0
+                        total_peso_plan = 0.0
+                        total_peso_real = 0.0
+
+                        for _, nf_row in nfs_da_op.iterrows():
+                            nf_numero = str(nf_row["nf_apara"])
+                            fornecedor_nf = str(nf_row.get("fornecedor", ""))
+                            tipo_nf = str(nf_row.get("tipo_fardo", ""))
+                            qtd_plan = int(nf_row.get("quant_fardos", 0) or 0)
+                            peso_plan = float(nf_row.get("peso_kg", 0) or 0)
+
+                            # Calcular realizado
+                            qtd_real = 0
+                            peso_real = 0.0
+                            if not prod_da_op.empty and "nf" in prod_da_op.columns:
+                                prod_nf = prod_da_op[prod_da_op["nf"].astype(str) == nf_numero]
+                                if not prod_nf.empty:
+                                    qtd_real = int(pd.to_numeric(prod_nf["quantidade"], errors="coerce").fillna(0).sum())
+                                    peso_real = float(pd.to_numeric(prod_nf["peso_kg"], errors="coerce").fillna(0).sum())
+
+                            qtd_rest = qtd_plan - qtd_real
+                            peso_rest = peso_plan - peso_real
+                            perc_concl = (qtd_real / qtd_plan * 100) if qtd_plan > 0 else 0.0
+
+                            total_qtd_plan += qtd_plan
+                            total_qtd_real += qtd_real
+                            total_peso_plan += peso_plan
+                            total_peso_real += peso_real
+
+                            linhas_acomp.append({
+                                "NF": nf_numero,
+                                "Fornecedor": fornecedor_nf,
+                                "Tipo": tipo_nf,
+                                "Qtd Plan.": qtd_plan,
+                                "Qtd Real.": qtd_real,
+                                "Qtd Rest.": qtd_rest,
+                                "Peso Plan.": peso_plan,
+                                "Peso Real.": peso_real,
+                                "Peso Rest.": peso_rest,
+                                "% Concl.": round(perc_concl, 1),
+                            })
+
+                        df_acomp = pd.DataFrame(linhas_acomp)
+
+                        # Colorir linhas com base no progresso
+                        def cor_progresso(val):
+                            if val >= 100:
+                                return "background-color: #d4edda; color: #155724"
+                            elif val > 0:
+                                return "background-color: #fff3cd; color: #856404"
+                            else:
+                                return "background-color: #f8d7da; color: #721c24"
+
+                        styled = df_acomp.style.applymap(cor_progresso, subset=["% Concl."])
+                        st.dataframe(styled, use_container_width=True, hide_index=True)
+
+                        # Progresso geral
+                        st.divider()
+                        st.subheader("Progresso Geral")
+
+                        total_qtd_rest = total_qtd_plan - total_qtd_real
+                        total_peso_rest = total_peso_plan - total_peso_real
+                        perc_geral = (total_qtd_real / total_qtd_plan * 100) if total_qtd_plan > 0 else 0.0
+                        progresso_barra = min(perc_geral / 100.0, 1.0)
+
+                        col_p1, col_p2, col_p3 = st.columns(3)
+                        col_p1.metric("Qtd Planejada", total_qtd_plan)
+                        col_p2.metric("Qtd Realizada", total_qtd_real)
+                        col_p3.metric("Qtd Restante", total_qtd_rest)
+
+                        col_w1, col_w2, col_w3 = st.columns(3)
+                        col_w1.metric("Peso Planejado", formatar_peso(total_peso_plan))
+                        col_w2.metric("Peso Realizado", formatar_peso(total_peso_real))
+                        col_w3.metric("Peso Restante", formatar_peso(total_peso_rest))
+
+                        st.progress(progresso_barra, text=f"Progresso: {perc_geral:.1f}%")
+
+                        if perc_geral >= 100:
+                            st.success("OP 100% concluida!")
+                        elif perc_geral > 0:
+                            st.info(f"OP em andamento - {perc_geral:.1f}% concluido.")
+                        else:
+                            st.warning("Producao ainda nao iniciada para esta OP.")
+
+# ===========================================================================
+# TAB 3: Consultar OPs
 # ===========================================================================
 with tab_consultar:
     st.subheader("Consultar Ordens de Producao")
@@ -244,7 +394,7 @@ with tab_consultar:
                         nfs_desta_op = df_nfs_all[df_nfs_all["op_lavacao_id"] == row["id"]]
                         if not nfs_desta_op.empty:
                             st.caption("Notas Fiscais vinculadas:")
-                            cols_nf = ["nf_apara", "fornecedor", "quant_fardos", "peso_kg", "obs"]
+                            cols_nf = ["nf_apara", "fornecedor", "tipo_fardo", "quant_fardos", "peso_kg", "obs"]
                             cols_presentes = [c for c in cols_nf if c in nfs_desta_op.columns]
                             st.dataframe(
                                 nfs_desta_op[cols_presentes],
