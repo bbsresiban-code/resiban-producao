@@ -24,6 +24,7 @@ def get_client():
     return gspread.authorize(creds)
 
 
+@st.cache_resource
 def get_spreadsheet():
     client = get_client()
     return client.open(st.secrets["spreadsheet_name"])
@@ -95,7 +96,10 @@ def update_rows(worksheet_name: str, match_col: str, match_values: list,
 
 
 def proximo_sequencial(worksheet_name: str, coluna: str, prefixo: str) -> str:
-    df = read_sheet_no_cache(worksheet_name)
+    try:
+        df = read_sheet(worksheet_name, ttl=10)
+    except Exception:
+        df = pd.DataFrame()
     if df.empty or coluna not in df.columns:
         return f"{prefixo}-0001"
     valores = df[coluna].astype(str)
