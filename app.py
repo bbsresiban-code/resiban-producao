@@ -34,4 +34,9 @@ pages = {
 }
 
 nav = st.navigation(pages)
+
+with st.sidebar:
+    st.image("https://www.crbreciclagem.com.br/wp-content/uploads/2024/07/Logo-CRB-2024.webp", width=150)
+    st.caption("Resiban - Gestao de Producao")
+
 nav.run()
