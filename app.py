@@ -11,13 +11,17 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-st.sidebar.markdown("## Resiban")
-st.sidebar.markdown("**Gestao de Producao**")
-st.sidebar.markdown("---")
+USUARIOS = {
+    "master":     {"senha": st.secrets["senhas"]["master"],     "perfil": "master"},
+    "turno_a":    {"senha": st.secrets["senhas"]["turno_a"],    "perfil": "turno"},
+    "turno_b":    {"senha": st.secrets["senhas"]["turno_b"],    "perfil": "turno"},
+    "turno_c":    {"senha": st.secrets["senhas"]["turno_c"],    "perfil": "turno"},
+    "logistica":  {"senha": st.secrets["senhas"]["logistica"],  "perfil": "logistica"},
+    "qualidade":  {"senha": st.secrets["senhas"]["qualidade"],  "perfil": "qualidade"},
+}
 
-pagina = st.sidebar.radio(
-    "Menu",
-    [
+PAGINAS_POR_PERFIL = {
+    "master": [
         "Dashboard",
         "OP Lavacao",
         "Producao Lavacao",
@@ -28,9 +32,25 @@ pagina = st.sidebar.radio(
         "Romaneio",
         "Exportar",
     ],
-)
+    "turno": [
+        "Producao Lavacao",
+        "Producao Extrusao",
+    ],
+    "logistica": [
+        "Laboratorio",
+        "Estoque",
+        "Romaneio",
+        "Exportar",
+    ],
+    "qualidade": [
+        "Laboratorio",
+        "Estoque",
+        "Romaneio",
+        "Exportar",
+    ],
+}
 
-paginas_map = {
+PAGINAS_MAP = {
     "Dashboard": "pages/1_dashboard.py",
     "OP Lavacao": "pages/2_op_lavacao.py",
     "Producao Lavacao": "pages/3_producao_lavacao.py",
@@ -42,6 +62,68 @@ paginas_map = {
     "Exportar": "pages/9_exportar.py",
 }
 
-with open(paginas_map[pagina], encoding="utf-8") as f:
-    code = f.read()
-exec(code)
+if "logado" not in st.session_state:
+    st.session_state.logado = False
+    st.session_state.usuario = None
+    st.session_state.perfil = None
+
+
+def fazer_login(usuario, senha):
+    if usuario in USUARIOS and USUARIOS[usuario]["senha"] == senha:
+        st.session_state.logado = True
+        st.session_state.usuario = usuario
+        st.session_state.perfil = USUARIOS[usuario]["perfil"]
+        return True
+    return False
+
+
+def fazer_logout():
+    st.session_state.logado = False
+    st.session_state.usuario = None
+    st.session_state.perfil = None
+
+
+if not st.session_state.logado:
+    st.markdown("## Resiban")
+    st.markdown("**Sistema de Gestao de Producao**")
+    st.markdown("---")
+
+    with st.form("login"):
+        usuario = st.selectbox(
+            "Usuario",
+            ["master", "turno_a", "turno_b", "turno_c", "logistica", "qualidade"],
+        )
+        senha = st.text_input("Senha", type="password")
+        entrar = st.form_submit_button("Entrar")
+
+    if entrar:
+        if fazer_login(usuario, senha):
+            st.rerun()
+        else:
+            st.error("Senha incorreta.")
+
+else:
+    perfil = st.session_state.perfil
+    paginas_disponiveis = PAGINAS_POR_PERFIL[perfil]
+
+    nomes_perfil = {
+        "master": "Master",
+        "turno": f"Turno {st.session_state.usuario[-1].upper()}",
+        "logistica": "Logistica",
+        "qualidade": "Qualidade",
+    }
+
+    st.sidebar.markdown("## Resiban")
+    st.sidebar.markdown(f"**{nomes_perfil[perfil]}**")
+    st.sidebar.markdown("---")
+
+    pagina = st.sidebar.radio("Menu", paginas_disponiveis)
+
+    st.sidebar.markdown("---")
+    if st.sidebar.button("Sair"):
+        fazer_logout()
+        st.rerun()
+
+    with open(PAGINAS_MAP[pagina], encoding="utf-8") as f:
+        code = f.read()
+    exec(code)
