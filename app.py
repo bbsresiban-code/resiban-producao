@@ -30,6 +30,7 @@ PAGINAS_POR_PERFIL = {
         "Laboratorio",
         "Estoque",
         "Romaneio",
+        "Laudos Tecnicos",
         "Exportar",
     ],
     "turno": [
@@ -40,12 +41,14 @@ PAGINAS_POR_PERFIL = {
         "Laboratorio",
         "Estoque",
         "Romaneio",
+        "Laudos Tecnicos",
         "Exportar",
     ],
     "qualidade": [
         "Laboratorio",
         "Estoque",
         "Romaneio",
+        "Laudos Tecnicos",
         "Exportar",
     ],
 }
@@ -59,6 +62,7 @@ PAGINAS_MAP = {
     "Laboratorio": "pages/6_qualidade.py",
     "Estoque": "pages/7_estoque.py",
     "Romaneio": "pages/8_romaneio.py",
+    "Laudos Tecnicos": "pages/10_laudos.py",
     "Exportar": "pages/9_exportar.py",
 }
 

@@ -15,6 +15,11 @@ from utils.database import (
 )
 from utils.formatters import formatar_data, formatar_peso
 
+try:
+    from utils.pdf_generator import gerar_pdf_romaneio
+except ImportError:
+    gerar_pdf_romaneio = None
+
 # ---------------------------------------------------------------------------
 # Titulo
 # ---------------------------------------------------------------------------
@@ -149,12 +154,8 @@ with tab_novo:
 
             col_c1, col_c2 = st.columns(2)
             with col_c1:
-                rom_nf_saida = st.text_input("NF de Saida", key="rom_nf_saida")
-                rom_codigo_produto_nf = st.text_input(
-                    "Codigo Produto NF", key="rom_codigo_produto_nf"
-                )
-            with col_c2:
                 rom_serial = st.text_input("Serial", key="rom_serial")
+            with col_c2:
                 rom_registrado_por = st.text_input(
                     "Registrado Por", key="rom_registrado_por"
                 )
@@ -191,8 +192,6 @@ with tab_novo:
                             "placa_veiculo": rom_placa.strip(),
                             "motorista": rom_motorista.strip(),
                             "responsavel_carregamento": rom_responsavel.strip(),
-                            "nf_saida": rom_nf_saida.strip(),
-                            "codigo_produto_nf": rom_codigo_produto_nf.strip(),
                             "peso_total_kg": peso_selecionado,
                             "qtd_lotes": qtd_selecionados,
                             "serial": rom_serial.strip(),
@@ -236,6 +235,19 @@ with tab_novo:
                             f"{formatar_peso(peso_selecionado)} | "
                             f"ID: `{romaneio_id}`"
                         )
+
+                        # Botao para baixar PDF do romaneio
+                        if gerar_pdf_romaneio is not None:
+                            try:
+                                pdf_bytes = gerar_pdf_romaneio(romaneio_data, itens)
+                                st.download_button(
+                                    "Baixar PDF do Romaneio",
+                                    pdf_bytes,
+                                    file_name=f"{rom_numero_pedido.strip()}.pdf",
+                                    mime="application/pdf",
+                                )
+                            except Exception:
+                                pass
                     except Exception as exc:
                         st.error(f"Erro ao criar romaneio: {exc}")
 
@@ -310,7 +322,6 @@ with tab_historico:
                         "motorista",
                         "peso_total_kg",
                         "qtd_lotes",
-                        "nf_saida",
                         "serial",
                     ]
                 ].copy(),
@@ -339,7 +350,6 @@ with tab_historico:
                     with col_d1:
                         st.markdown(f"**Cliente:** {row['cliente']}")
                         st.markdown(f"**Pedido:** {row['numero_pedido']}")
-                        st.markdown(f"**NF Saida:** {row.get('nf_saida', '')}")
                     with col_d2:
                         st.markdown(f"**Transportadora:** {row['transportadora']}")
                         st.markdown(f"**Placa:** {row['placa_veiculo']}")

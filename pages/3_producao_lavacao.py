@@ -8,6 +8,11 @@ from datetime import date, datetime, timedelta, time
 from utils.database import read_sheet, read_sheet_no_cache, append_row
 from utils.formatters import formatar_data, formatar_peso, TURNOS, TIPOS_PARADA
 
+try:
+    from utils.pdf_generator import gerar_pdf_producao_lavacao
+except ImportError:
+    gerar_pdf_producao_lavacao = None
+
 # ---------------------------------------------------------------------------
 # Titulo
 # ---------------------------------------------------------------------------
@@ -104,6 +109,35 @@ with tab_lancamento:
                 append_row("producao_lavacao", dados_fardinho)
                 st.toast("Fardinho registrado com sucesso!")
                 st.success(f"Fardinho NF **{nf_fardinho}** registrado.")
+
+                # Botao para baixar PDF da producao do dia/turno
+                if gerar_pdf_producao_lavacao is not None:
+                    try:
+                        data_str = data_prod.isoformat()
+                        df_reg = read_sheet_no_cache("producao_lavacao")
+                        df_par = read_sheet_no_cache("paradas_lavacao")
+                        registros_list = []
+                        paradas_list = []
+                        if not df_reg.empty:
+                            registros_list = df_reg[
+                                (df_reg["data"] == data_str) & (df_reg["turno"] == turno)
+                            ].to_dict("records")
+                        if not df_par.empty:
+                            paradas_list = df_par[
+                                (df_par["data"] == data_str) & (df_par["turno"] == turno)
+                            ].to_dict("records")
+                        pdf_bytes = gerar_pdf_producao_lavacao(
+                            data_str, turno, registros_list, paradas_list
+                        )
+                        st.download_button(
+                            "Baixar PDF da Producao",
+                            pdf_bytes,
+                            file_name=f"producao_lavacao_{data_str}_{turno}.pdf",
+                            mime="application/pdf",
+                            key="pdf_fardinho",
+                        )
+                    except Exception:
+                        pass
             except Exception as exc:
                 st.error(f"Erro ao registrar fardinho: {exc}")
 
@@ -158,6 +192,35 @@ with tab_lancamento:
                 append_row("producao_lavacao", dados_fardao)
                 st.toast("Fardao registrado com sucesso!")
                 st.success(f"Fardao NF **{nf_fardao}** registrado.")
+
+                # Botao para baixar PDF da producao do dia/turno
+                if gerar_pdf_producao_lavacao is not None:
+                    try:
+                        data_str = data_prod.isoformat()
+                        df_reg = read_sheet_no_cache("producao_lavacao")
+                        df_par = read_sheet_no_cache("paradas_lavacao")
+                        registros_list = []
+                        paradas_list = []
+                        if not df_reg.empty:
+                            registros_list = df_reg[
+                                (df_reg["data"] == data_str) & (df_reg["turno"] == turno)
+                            ].to_dict("records")
+                        if not df_par.empty:
+                            paradas_list = df_par[
+                                (df_par["data"] == data_str) & (df_par["turno"] == turno)
+                            ].to_dict("records")
+                        pdf_bytes = gerar_pdf_producao_lavacao(
+                            data_str, turno, registros_list, paradas_list
+                        )
+                        st.download_button(
+                            "Baixar PDF da Producao",
+                            pdf_bytes,
+                            file_name=f"producao_lavacao_{data_str}_{turno}.pdf",
+                            mime="application/pdf",
+                            key="pdf_fardao",
+                        )
+                    except Exception:
+                        pass
             except Exception as exc:
                 st.error(f"Erro ao registrar fardao: {exc}")
 
@@ -218,6 +281,35 @@ with tab_lancamento:
                 append_row("producao_lavacao", dados_perdas)
                 st.toast("Perdas registradas com sucesso!")
                 st.success(f"Perdas registradas - Total: {formatar_peso(perda_total)}")
+
+                # Botao para baixar PDF da producao do dia/turno
+                if gerar_pdf_producao_lavacao is not None:
+                    try:
+                        data_str = data_prod.isoformat()
+                        df_reg = read_sheet_no_cache("producao_lavacao")
+                        df_par = read_sheet_no_cache("paradas_lavacao")
+                        registros_list = []
+                        paradas_list = []
+                        if not df_reg.empty:
+                            registros_list = df_reg[
+                                (df_reg["data"] == data_str) & (df_reg["turno"] == turno)
+                            ].to_dict("records")
+                        if not df_par.empty:
+                            paradas_list = df_par[
+                                (df_par["data"] == data_str) & (df_par["turno"] == turno)
+                            ].to_dict("records")
+                        pdf_bytes = gerar_pdf_producao_lavacao(
+                            data_str, turno, registros_list, paradas_list
+                        )
+                        st.download_button(
+                            "Baixar PDF da Producao",
+                            pdf_bytes,
+                            file_name=f"producao_lavacao_{data_str}_{turno}.pdf",
+                            mime="application/pdf",
+                            key="pdf_perdas",
+                        )
+                    except Exception:
+                        pass
             except Exception as exc:
                 st.error(f"Erro ao registrar perdas: {exc}")
 

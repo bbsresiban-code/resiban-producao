@@ -15,6 +15,11 @@ from utils.formatters import (
     formatar_data,
 )
 
+try:
+    from utils.pdf_generator import gerar_pdf_producao_extrusao
+except ImportError:
+    gerar_pdf_producao_extrusao = None
+
 st.title("Producao Extrusao")
 
 tab_lote, tab_manut, tab_hist = st.tabs(["Novo Lote", "Manutencao", "Historico"])
@@ -126,6 +131,34 @@ with tab_lote:
                             f"### Codigo: `{codigo_lote}`"
                         )
                         st.balloons()
+
+                        # Botao para baixar PDF da producao do dia/turno
+                        if gerar_pdf_producao_extrusao is not None:
+                            try:
+                                data_str = data_lote.isoformat()
+                                df_reg = read_sheet("producao_extrusao")
+                                df_manut = read_sheet("manutencao_extrusao")
+                                registros_list = []
+                                manutencao_list = []
+                                if not df_reg.empty:
+                                    registros_list = df_reg[
+                                        (df_reg["data"] == data_str) & (df_reg["turno"] == turno)
+                                    ].to_dict("records")
+                                if not df_manut.empty:
+                                    manutencao_list = df_manut[
+                                        (df_manut["data"] == data_str) & (df_manut["turno"] == turno)
+                                    ].to_dict("records")
+                                pdf_bytes = gerar_pdf_producao_extrusao(
+                                    data_str, turno, registros_list, manutencao_list
+                                )
+                                st.download_button(
+                                    "Baixar PDF da Producao",
+                                    pdf_bytes,
+                                    file_name=f"producao_extrusao_{data_str}_{turno}.pdf",
+                                    mime="application/pdf",
+                                )
+                            except Exception:
+                                pass
                     except Exception as exc:
                         st.error(f"Erro ao registrar lote: {exc}")
 

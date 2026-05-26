@@ -8,6 +8,11 @@ from datetime import date, datetime, timedelta
 from utils.database import read_sheet, read_sheet_no_cache, append_row, proximo_sequencial
 from utils.formatters import formatar_data, formatar_peso
 
+try:
+    from utils.pdf_generator import gerar_pdf_op_lavacao
+except ImportError:
+    gerar_pdf_op_lavacao = None
+
 # ---------------------------------------------------------------------------
 # Titulo
 # ---------------------------------------------------------------------------
@@ -68,6 +73,19 @@ with tab_nova:
                 st.session_state["op_criada_numero"] = numero_op.strip()
                 st.toast("OP criada com sucesso!")
                 st.success(f"OP **{numero_op}** criada com sucesso! ID: `{resultado['id']}`")
+
+                # Botao para baixar PDF da OP recem-criada
+                if gerar_pdf_op_lavacao is not None:
+                    try:
+                        pdf_bytes = gerar_pdf_op_lavacao(op_data, [])
+                        st.download_button(
+                            "Baixar PDF da OP",
+                            pdf_bytes,
+                            file_name=f"{numero_op.strip()}.pdf",
+                            mime="application/pdf",
+                        )
+                    except Exception:
+                        pass
             except Exception as exc:
                 st.error(f"Erro ao criar OP: {exc}")
 
@@ -202,6 +220,7 @@ with tab_consultar:
                         st.markdown(f"**Indice Fluidez:** {row['indice_fluidez']}")
                         st.markdown(f"**Observacao:** {row.get('observacao', '')}")
 
+                    nfs_lista = []
                     if not df_nfs_all.empty:
                         nfs_desta_op = df_nfs_all[df_nfs_all["op_lavacao_id"] == row["id"]]
                         if not nfs_desta_op.empty:
@@ -211,7 +230,23 @@ with tab_consultar:
                                 use_container_width=True,
                                 hide_index=True,
                             )
+                            nfs_lista = nfs_desta_op.to_dict("records")
                         else:
                             st.caption("Nenhuma NF vinculada a esta OP.")
                     else:
                         st.caption("Nenhuma NF vinculada a esta OP.")
+
+                    # Botao para baixar PDF da OP
+                    if gerar_pdf_op_lavacao is not None:
+                        try:
+                            op_dict = row.to_dict()
+                            pdf_bytes = gerar_pdf_op_lavacao(op_dict, nfs_lista)
+                            st.download_button(
+                                "Baixar PDF da OP",
+                                pdf_bytes,
+                                file_name=f"{row['numero_op']}.pdf",
+                                mime="application/pdf",
+                                key=f"pdf_op_lav_{row['numero_op']}",
+                            )
+                        except Exception:
+                            pass

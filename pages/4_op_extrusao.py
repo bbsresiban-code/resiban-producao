@@ -8,6 +8,11 @@ from datetime import date, datetime
 from utils.database import read_sheet, append_row, update_rows, read_sheet_no_cache, proximo_sequencial
 from utils.formatters import EXTRUSORAS, formatar_peso, formatar_data, formatar_percentual
 
+try:
+    from utils.pdf_generator import gerar_pdf_op_extrusao
+except ImportError:
+    gerar_pdf_op_extrusao = None
+
 st.title("OP Extrusao")
 
 tab_nova, tab_consultar, tab_fechar = st.tabs(["Nova OP", "Consultar OPs", "Fechar OP"])
@@ -67,6 +72,19 @@ with tab_nova:
                     }
                     append_row("op_extrusao", dados)
                     st.success(f"OP {numero_op.strip().upper()} criada com sucesso!")
+
+                    # Botao para baixar PDF da OP recem-criada
+                    if gerar_pdf_op_extrusao is not None:
+                        try:
+                            pdf_bytes = gerar_pdf_op_extrusao(dados, [])
+                            st.download_button(
+                                "Baixar PDF da OP",
+                                pdf_bytes,
+                                file_name=f"{numero_op.strip().upper()}.pdf",
+                                mime="application/pdf",
+                            )
+                        except Exception:
+                            pass
                 except Exception as exc:
                     st.error(f"Erro ao salvar OP: {exc}")
 
@@ -141,6 +159,23 @@ with tab_consultar:
                         use_container_width=True,
                         hide_index=True,
                     )
+
+                # Botao para baixar PDF da OP selecionada
+                if gerar_pdf_op_extrusao is not None:
+                    try:
+                        op_row = df_filtrado[df_filtrado["numero_op"] == op_selecionada].iloc[0]
+                        op_dict = op_row.to_dict()
+                        lotes_lista = lotes_op.to_dict("records") if not lotes_op.empty else []
+                        pdf_bytes = gerar_pdf_op_extrusao(op_dict, lotes_lista)
+                        st.download_button(
+                            "Baixar PDF da OP",
+                            pdf_bytes,
+                            file_name=f"{op_selecionada}.pdf",
+                            mime="application/pdf",
+                            key=f"pdf_op_ext_{op_selecionada}",
+                        )
+                    except Exception:
+                        pass
             else:
                 st.info("Nenhum lote de producao encontrado.")
     else:
