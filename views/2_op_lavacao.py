@@ -388,7 +388,7 @@ with tab_acompanhamento:
                             else:
                                 return "background-color: #f8d7da; color: #721c24"
 
-                        styled = df_acomp.style.applymap(cor_progresso, subset=["% Concl."])
+                        styled = df_acomp.style.map(cor_progresso, subset=["% Concl."])
                         st.dataframe(styled, use_container_width=True, hide_index=True)
 
                         # Progresso geral
