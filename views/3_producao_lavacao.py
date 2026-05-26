@@ -98,11 +98,23 @@ with tab_lancamento:
 
     ops_abertas = carregar_ops_abertas()
 
+    usuario_logado = st.session_state.get("usuario", "master")
+    perfil_logado = st.session_state.get("perfil", "master")
+
+    if perfil_logado == "turno":
+        turno_fixo = usuario_logado[-1].upper()
+    else:
+        turno_fixo = None
+
     col_sel1, col_sel2, col_sel3 = st.columns(3)
     with col_sel1:
         data_prod = st.date_input("Data", value=date.today(), key="data_lancamento")
     with col_sel2:
-        turno = st.selectbox("Turno", options=TURNOS, key="turno_lancamento")
+        if turno_fixo:
+            turno = turno_fixo
+            st.info(f"Turno: **{turno}**")
+        else:
+            turno = st.selectbox("Turno", options=TURNOS, key="turno_lancamento")
     with col_sel3:
         if ops_abertas:
             numero_op = st.selectbox(
@@ -429,9 +441,13 @@ with tab_paradas:
             data_parada = st.date_input(
                 "Data", value=date.today(), key="data_parada"
             )
-            turno_parada = st.selectbox(
-                "Turno", options=TURNOS, key="turno_parada"
-            )
+            if turno_fixo:
+                turno_parada = turno_fixo
+                st.info(f"Turno: **{turno_parada}**")
+            else:
+                turno_parada = st.selectbox(
+                    "Turno", options=TURNOS, key="turno_parada"
+                )
             tipo_parada = st.selectbox(
                 "Tipo de Parada", options=TIPOS_PARADA, key="tipo_parada"
             )

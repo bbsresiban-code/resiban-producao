@@ -22,6 +22,13 @@ except ImportError:
 
 st.title("Producao Extrusao")
 
+usuario_logado = st.session_state.get("usuario", "master")
+perfil_logado = st.session_state.get("perfil", "master")
+if perfil_logado == "turno":
+    turno_fixo_ext = usuario_logado[-1].upper()
+else:
+    turno_fixo_ext = None
+
 tab_lote, tab_manut, tab_hist = st.tabs(["Novo Lote", "Manutencao", "Historico"])
 
 # ---------------------------------------------------------------------------
@@ -30,7 +37,6 @@ tab_lote, tab_manut, tab_hist = st.tabs(["Novo Lote", "Manutencao", "Historico"]
 with tab_lote:
     st.subheader("Registrar Novo Lote de Extrusao")
 
-    # --- Fetch open OPs ---
     try:
         df_ops = read_sheet("op_extrusao")
     except Exception as exc:
@@ -44,12 +50,15 @@ with tab_lote:
     if not ops_abertas:
         st.warning("Nenhuma OP de extrusao aberta. Crie uma OP antes de registrar lotes.")
     else:
-        # --- Selectors outside the form for live preview ---
         col_s1, col_s2, col_s3 = st.columns(3)
         with col_s1:
             data_lote = st.date_input("Data", value=date.today(), key="lote_data")
         with col_s2:
-            turno = st.selectbox("Turno", options=TURNOS, key="lote_turno")
+            if turno_fixo_ext:
+                turno = turno_fixo_ext
+                st.info(f"Turno: **{turno}**")
+            else:
+                turno = st.selectbox("Turno", options=TURNOS, key="lote_turno")
         with col_s3:
             numero_op = st.selectbox("Numero da OP", options=ops_abertas, key="lote_op")
 
@@ -172,7 +181,11 @@ with tab_manut:
         col_m1, col_m2 = st.columns(2)
         with col_m1:
             data_manut = st.date_input("Data", value=date.today(), key="manut_data")
-            turno_manut = st.selectbox("Turno", options=TURNOS, key="manut_turno")
+            if turno_fixo_ext:
+                turno_manut = turno_fixo_ext
+                st.info(f"Turno: **{turno_manut}**")
+            else:
+                turno_manut = st.selectbox("Turno", options=TURNOS, key="manut_turno")
         with col_m2:
             troca_telas = st.text_input("Troca de Telas")
             limpeza_gaveta = st.text_input("Limpeza de Gaveta")
