@@ -96,15 +96,26 @@ with tab_lote:
         codigo_preview = preview_codigo(tipo, extrusora, data_lote)
         st.info(f"Codigo do lote (preview): **{codigo_preview}**")
 
-        # --- Troca de telas (fora do form para condicional dinamica) ---
-        st.markdown("**Troca de Telas**")
+        # --- Dados do lote ---
+        st.markdown("---")
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            peso_kg = st.number_input(
+                "Peso (kg)", min_value=0.0, step=0.5, format="%.1f", key="lote_peso"
+            )
+            hora = st.time_input("Hora", value=time(8, 0), key="lote_hora")
+        with col_f2:
+            observacao_lote = st.text_input("Observacao", key="lote_obs")
+            registrado_por = st.text_input("Registrado por", key="lote_reg")
+
+        # --- Troca de telas (condicional por extrusora) ---
         qtd_troca_telas = 0
         qtd_1o_estagio = 0
         qtd_2o_estagio = 0
         troca_telas = "Nao"
 
         if extrusora == "A":
-            st.caption("Extrusora A: informar trocas do 1o e 2o estagio (obrigatorio).")
+            st.markdown("**Troca de Telas** *(obrigatorio para Extrusora A)*")
             col_tt1, col_tt2 = st.columns(2)
             with col_tt1:
                 qtd_1o_estagio = st.number_input(
@@ -122,7 +133,7 @@ with tab_lote:
             col_tt1, col_tt2 = st.columns(2)
             with col_tt1:
                 troca_telas = st.selectbox(
-                    "Houve troca de telas?",
+                    "Troca de Telas",
                     options=["Nao", "Sim"],
                     key="lote_troca_telas",
                 )
@@ -133,68 +144,54 @@ with tab_lote:
                         key="lote_qtd_telas",
                     )
 
-        # --- Form for remaining fields ---
-        with st.form("form_novo_lote", clear_on_submit=True):
-            col_f1, col_f2 = st.columns(2)
-            with col_f1:
-                peso_kg = st.number_input(
-                    "Peso (kg)", min_value=0.0, step=0.5, format="%.1f"
-                )
-                hora = st.time_input("Hora", value=time(8, 0))
-            with col_f2:
-                observacao_lote = st.text_input("Observacao")
-                registrado_por = st.text_input("Registrado por")
+        submitted = st.button("Registrar Lote", type="primary", use_container_width=True)
 
-            submitted = st.form_submit_button(
-                "Registrar Lote", use_container_width=True, type="primary"
-            )
+        if submitted:
+            erros = []
+            if peso_kg <= 0:
+                erros.append("Peso deve ser maior que zero.")
+            if not registrado_por.strip():
+                erros.append("Campo 'Registrado por' e obrigatorio.")
+            if extrusora == "A" and qtd_troca_telas == 0:
+                erros.append("Extrusora A: informe a quantidade de telas trocadas (1o e/ou 2o estagio).")
 
-            if submitted:
-                erros = []
-                if peso_kg <= 0:
-                    erros.append("Peso deve ser maior que zero.")
-                if not registrado_por.strip():
-                    erros.append("Campo 'Registrado por' e obrigatorio.")
-                if extrusora == "A" and qtd_troca_telas == 0:
-                    erros.append("Extrusora A: informe a quantidade de telas trocadas (1o e/ou 2o estagio).")
+            if erros:
+                for e in erros:
+                    st.error(e)
+            else:
+                try:
+                    codigo_lote, sequencial = gerar_codigo_serial(
+                        tipo, extrusora, data_lote
+                    )
 
-                if erros:
-                    for e in erros:
-                        st.error(e)
-                else:
-                    try:
-                        codigo_lote, sequencial = gerar_codigo_serial(
-                            tipo, extrusora, data_lote
-                        )
+                    dados = {
+                        "data": data_lote.isoformat(),
+                        "turno": turno,
+                        "hora": hora.strftime("%H:%M"),
+                        "numero_op": numero_op,
+                        "opl_origem": opl_origem,
+                        "codigo_lote": codigo_lote,
+                        "tipo": tipo,
+                        "tipo_descricao": TIPOS_PRODUTO[tipo],
+                        "extrusora": extrusora,
+                        "peso_kg": peso_kg,
+                        "troca_telas": f"Sim (1E:{qtd_1o_estagio} 2E:{qtd_2o_estagio})" if extrusora == "A" else (f"Sim ({qtd_troca_telas})" if troca_telas == "Sim" else "Nao"),
+                        "mes": data_lote.month,
+                        "ano": data_lote.year % 100,
+                        "sequencial": sequencial,
+                        "status": "em_analise",
+                        "observacao_lote": observacao_lote.strip(),
+                        "registrado_por": registrado_por.strip(),
+                    }
 
-                        dados = {
-                            "data": data_lote.isoformat(),
-                            "turno": turno,
-                            "hora": hora.strftime("%H:%M"),
-                            "numero_op": numero_op,
-                            "opl_origem": opl_origem,
-                            "codigo_lote": codigo_lote,
-                            "tipo": tipo,
-                            "tipo_descricao": TIPOS_PRODUTO[tipo],
-                            "extrusora": extrusora,
-                            "peso_kg": peso_kg,
-                            "troca_telas": f"Sim (1E:{qtd_1o_estagio} 2E:{qtd_2o_estagio})" if extrusora == "A" else (f"Sim ({qtd_troca_telas})" if troca_telas == "Sim" else "Nao"),
-                            "mes": data_lote.month,
-                            "ano": data_lote.year % 100,
-                            "sequencial": sequencial,
-                            "status": "em_analise",
-                            "observacao_lote": observacao_lote.strip(),
-                            "registrado_por": registrado_por.strip(),
-                        }
-
-                        append_row("producao_extrusao", dados)
-                        st.success(
-                            f"Lote registrado com sucesso!  \n"
-                            f"### Codigo: `{codigo_lote}`"
-                        )
-                        st.balloons()
-                    except Exception as exc:
-                        st.error(f"Erro ao registrar lote: {exc}")
+                    append_row("producao_extrusao", dados)
+                    st.success(
+                        f"Lote registrado com sucesso!  \n"
+                        f"### Codigo: `{codigo_lote}`"
+                    )
+                    st.balloons()
+                except Exception as exc:
+                    st.error(f"Erro ao registrar lote: {exc}")
 
         # ---------------------------------------------------------------
         # Relatorio do Turno (PDF consolidado)
