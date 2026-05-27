@@ -190,8 +190,8 @@ with tab_novo:
                             "placa_veiculo": rom_placa.strip(),
                             "motorista": rom_motorista.strip(),
                             "responsavel_carregamento": rom_responsavel.strip(),
-                            "peso_total_kg": peso_selecionado,
-                            "qtd_lotes": qtd_selecionados,
+                            "peso_total_kg": float(peso_selecionado),
+                            "qtd_lotes": int(qtd_selecionados),
                             "serial": rom_serial.strip(),
                             "registrado_por": rom_registrado_por.strip(),
                         }
@@ -210,9 +210,9 @@ with tab_novo:
                             itens.append(
                                 {
                                     "romaneio_id": romaneio_id,
-                                    "codigo_lote": lote_row["codigo_lote"],
+                                    "codigo_lote": str(lote_row["codigo_lote"]),
                                     "produto": produto_desc,
-                                    "peso_kg": lote_row["peso_kg"],
+                                    "peso_kg": float(lote_row["peso_kg"]),
                                 }
                             )
                         append_rows("romaneio_itens", itens)
