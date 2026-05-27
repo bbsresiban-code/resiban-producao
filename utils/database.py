@@ -30,7 +30,7 @@ def get_spreadsheet():
     return client.open(st.secrets["spreadsheet_name"])
 
 
-def read_sheet(worksheet_name: str, ttl: int = 120) -> pd.DataFrame:
+def read_sheet(worksheet_name: str, ttl: int = 180) -> pd.DataFrame:
     @st.cache_data(ttl=ttl)
     def _read(ws_name: str) -> pd.DataFrame:
         sp = get_spreadsheet()
@@ -43,7 +43,7 @@ def read_sheet(worksheet_name: str, ttl: int = 120) -> pd.DataFrame:
 
 
 def read_sheet_no_cache(worksheet_name: str) -> pd.DataFrame:
-    return read_sheet(worksheet_name, ttl=15)
+    return read_sheet(worksheet_name, ttl=30)
 
 
 def append_row(worksheet_name: str, data: dict) -> dict:
@@ -92,7 +92,7 @@ def update_rows(worksheet_name: str, match_col: str, match_values: list,
 
 def proximo_sequencial(worksheet_name: str, coluna: str, prefixo: str) -> str:
     try:
-        df = read_sheet(worksheet_name, ttl=10)
+        df = read_sheet(worksheet_name, ttl=30)
     except Exception:
         df = pd.DataFrame()
     if df.empty or coluna not in df.columns:
