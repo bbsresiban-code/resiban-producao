@@ -30,20 +30,35 @@ def get_spreadsheet():
     return client.open(st.secrets["spreadsheet_name"])
 
 
+def _get_version(ws_name: str) -> int:
+    if "_sheet_versions" not in st.session_state:
+        st.session_state._sheet_versions = {}
+    return st.session_state._sheet_versions.get(ws_name, 0)
+
+
+def _bump_version(ws_name: str):
+    if "_sheet_versions" not in st.session_state:
+        st.session_state._sheet_versions = {}
+    st.session_state._sheet_versions[ws_name] = _get_version(ws_name) + 1
+
+
+@st.cache_data(ttl=300)
+def _read_sheet_cached(ws_name: str, _version: int) -> pd.DataFrame:
+    sp = get_spreadsheet()
+    ws = sp.worksheet(ws_name)
+    data = ws.get_all_records()
+    if not data:
+        return pd.DataFrame()
+    return pd.DataFrame(data)
+
+
 def read_sheet(worksheet_name: str, ttl: int = 300) -> pd.DataFrame:
-    @st.cache_data(ttl=ttl)
-    def _read(ws_name: str) -> pd.DataFrame:
-        sp = get_spreadsheet()
-        ws = sp.worksheet(ws_name)
-        data = ws.get_all_records()
-        if not data:
-            return pd.DataFrame()
-        return pd.DataFrame(data)
-    return _read(worksheet_name)
+    version = _get_version(worksheet_name)
+    return _read_sheet_cached(worksheet_name, version)
 
 
 def read_sheet_no_cache(worksheet_name: str) -> pd.DataFrame:
-    return read_sheet(worksheet_name, ttl=60)
+    return read_sheet(worksheet_name)
 
 
 def append_row(worksheet_name: str, data: dict) -> dict:
@@ -54,7 +69,7 @@ def append_row(worksheet_name: str, data: dict) -> dict:
     headers = ws.row_values(1)
     row = [data.get(h, "") for h in headers]
     ws.append_row(row, value_input_option="USER_ENTERED")
-    st.cache_data.clear()
+    _bump_version(worksheet_name)
     return data
 
 
@@ -69,7 +84,7 @@ def append_rows(worksheet_name: str, rows: list[dict]) -> list[dict]:
         data["created_at"] = now
         formatted_rows.append([data.get(h, "") for h in headers])
     ws.append_rows(formatted_rows, value_input_option="USER_ENTERED")
-    st.cache_data.clear()
+    _bump_version(worksheet_name)
     return rows
 
 
@@ -87,7 +102,7 @@ def update_rows(worksheet_name: str, match_col: str, match_values: list,
             cells_to_update.append(gspread.Cell(i + 1, update_idx, new_value))
     if cells_to_update:
         ws.update_cells(cells_to_update)
-    st.cache_data.clear()
+    _bump_version(worksheet_name)
 
 
 def proximo_sequencial(worksheet_name: str, coluna: str, prefixo: str) -> str:
