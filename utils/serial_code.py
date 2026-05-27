@@ -5,6 +5,7 @@ TIPOS = {
     "01": "Produto Proprio",
     "02": "Servico/Terceiros",
     "04": "Revenda",
+    "06": "Mistura",
 }
 
 
@@ -17,16 +18,13 @@ def gerar_codigo_serial(tipo: str, extrusora: str, data_producao) -> tuple[str, 
     if df.empty:
         proximo_seq = 1
     else:
-        df["tipo"] = df["tipo"].astype(str).str.zfill(2)
         df["mes"] = pd.to_numeric(df["mes"], errors="coerce")
         df["ano"] = pd.to_numeric(df["ano"], errors="coerce")
         df["sequencial"] = pd.to_numeric(df["sequencial"], errors="coerce")
 
         filtro = (
-            (df["tipo"] == tipo) &
             (df["mes"] == mes) &
-            (df["ano"] == ano) &
-            (df["extrusora"] == extrusora)
+            (df["ano"] == ano)
         )
         subset = df[filtro]
 
