@@ -37,6 +37,7 @@ with tab_nova:
             )
 
         with col2:
+            origem = st.selectbox("Origem do Material", ["Proprio", "Servico"])
             produto = st.text_input("Produto")
             maquina = st.selectbox("Maquina", options=EXTRUSORAS, format_func=lambda x: f"Extrusora {x}")
             coordenador = st.text_input("Coordenador")
@@ -54,12 +55,15 @@ with tab_nova:
                     st.error(e)
             else:
                 try:
+                    tipo_lote = "01" if origem == "Proprio" else "02"
                     dados = {
                         "numero_op": numero_op.strip().upper(),
                         "data": data_op.isoformat(),
                         "responsavel": responsavel.strip(),
                         "cliente": cliente.strip(),
                         "volume_ton": volume_ton,
+                        "origem": origem,
+                        "tipo_lote": tipo_lote,
                         "produto": produto.strip(),
                         "maquina": maquina,
                         "data_inicio": "",

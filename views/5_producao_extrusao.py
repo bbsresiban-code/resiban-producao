@@ -62,16 +62,23 @@ with tab_lote:
         with col_s3:
             numero_op = st.selectbox("Numero da OP", options=ops_abertas, key="lote_op")
 
-        # Tipo and Extrusora outside form for live preview
-        opcoes_tipo = {k: f"{k} - {v}" for k, v in TIPOS_PRODUTO.items()}
+        # Buscar tipo da OP selecionada
+        tipo = "01"
+        origem_op = "Proprio"
+        try:
+            op_sel_row = df_ops[df_ops["numero_op"] == numero_op].iloc[0]
+            tipo_op = str(op_sel_row.get("tipo_lote", "")).strip()
+            if tipo_op in ("01", "02"):
+                tipo = tipo_op
+            origem_op = str(op_sel_row.get("origem", "Proprio"))
+        except Exception:
+            pass
+
+        tipo_desc = TIPOS_PRODUTO.get(tipo, "Produto Proprio")
+
         col_t1, col_t2 = st.columns(2)
         with col_t1:
-            tipo = st.selectbox(
-                "Tipo",
-                options=list(opcoes_tipo.keys()),
-                format_func=lambda x: opcoes_tipo[x],
-                key="lote_tipo",
-            )
+            st.info(f"Origem: **{origem_op}** (Lote tipo **{tipo}** - {tipo_desc})")
         with col_t2:
             extrusora = st.radio(
                 "Extrusora",
