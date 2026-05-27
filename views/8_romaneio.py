@@ -152,7 +152,7 @@ with tab_novo:
             # -------------------------------------------------------------------
             st.markdown("#### Fechamento")
 
-            rom_serial = proximo_sequencial("romaneio", "serial", "SER")
+            rom_serial = proximo_sequencial("romaneio", "serial", "ROM")
             st.info(f"Serial: **{rom_serial}**")
             rom_registrado_por = st.text_input(
                 "Registrado Por", key="rom_registrado_por"
