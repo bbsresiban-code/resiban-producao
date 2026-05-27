@@ -96,6 +96,23 @@ with tab_lote:
         codigo_preview = preview_codigo(tipo, extrusora, data_lote)
         st.info(f"Codigo do lote (preview): **{codigo_preview}**")
 
+        # --- Troca de telas (fora do form para condicional dinamica) ---
+        col_tt1, col_tt2 = st.columns(2)
+        with col_tt1:
+            troca_telas = st.selectbox(
+                "Troca de Telas",
+                options=["Nao", "Sim"],
+                help="Houve troca de telas neste lote?",
+                key="lote_troca_telas",
+            )
+        with col_tt2:
+            qtd_troca_telas = 0
+            if troca_telas == "Sim":
+                qtd_troca_telas = st.number_input(
+                    "Quantas telas foram trocadas?", min_value=1, step=1, value=1,
+                    key="lote_qtd_telas",
+                )
+
         # --- Form for remaining fields ---
         with st.form("form_novo_lote", clear_on_submit=True):
             col_f1, col_f2 = st.columns(2)
@@ -104,16 +121,6 @@ with tab_lote:
                     "Peso (kg)", min_value=0.0, step=0.5, format="%.1f"
                 )
                 hora = st.time_input("Hora", value=time(8, 0))
-                troca_telas = st.selectbox(
-                    "Troca de Telas",
-                    options=["Nao", "Sim"],
-                    help="Houve troca de telas neste lote?",
-                )
-                qtd_troca_telas = 0
-                if troca_telas == "Sim":
-                    qtd_troca_telas = st.number_input(
-                        "Quantidade de Trocas", min_value=1, step=1, value=1,
-                    )
             with col_f2:
                 observacao_lote = st.text_input("Observacao")
                 registrado_por = st.text_input("Registrado por")
