@@ -186,18 +186,53 @@ def gerar_pdf_fechamento_op_lavacao(
     numero = op_data.get("numero_op", "")
     _header(pdf, f"FECHAMENTO DE OP LAVACAO - {numero}")
 
-    _add_field(pdf, "Numero OP", numero)
-    _add_field(pdf, "Data", op_data.get("data", ""))
-    _add_field(pdf, "Responsavel", op_data.get("responsavel", ""))
-    _add_field(pdf, "Cliente", op_data.get("cliente", ""))
-    _add_field(pdf, "Volume Planejado (ton)", op_data.get("volume_ton", op_data.get("volume", "")))
-    _add_field(pdf, "Produto", op_data.get("produto", ""))
-    _add_field(pdf, "Indice de Fluidez", op_data.get("indice_fluidez", ""))
-    _add_field(pdf, "Status", "FECHADA")
+    pdf.set_font("Helvetica", "", 9)
+    col_left = 90
+    col_right = pdf.w - pdf.l_margin - pdf.r_margin - col_left
+    y_start = pdf.get_y()
 
-    _section_title(pdf, "Notas Fiscais de Apara")
-    headers_nf = ["NF", "Fornecedor", "Tipo", "Qtd Plan.", "Peso Plan. (kg)"]
-    col_w_nf = [30, 40, 25, 25, 35]
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(35, 5, "Numero OP:", new_x="END", new_y="TOP")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(55, 5, numero, new_x="END", new_y="TOP")
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(20, 5, "Data:", new_x="END", new_y="TOP")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(0, 5, str(op_data.get("data", "")), new_x="LMARGIN", new_y="NEXT")
+
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(35, 5, "Responsavel:", new_x="END", new_y="TOP")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(55, 5, str(op_data.get("responsavel", "")), new_x="END", new_y="TOP")
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(20, 5, "Cliente:", new_x="END", new_y="TOP")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(0, 5, str(op_data.get("cliente", "")), new_x="LMARGIN", new_y="NEXT")
+
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(35, 5, "Volume (ton):", new_x="END", new_y="TOP")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(55, 5, str(op_data.get("volume_ton", op_data.get("volume", ""))), new_x="END", new_y="TOP")
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(20, 5, "Produto:", new_x="END", new_y="TOP")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(0, 5, str(op_data.get("produto", "")), new_x="LMARGIN", new_y="NEXT")
+
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(35, 5, "Indice Fluidez:", new_x="END", new_y="TOP")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(55, 5, str(op_data.get("indice_fluidez", "")), new_x="END", new_y="TOP")
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(20, 5, "Status:", new_x="END", new_y="TOP")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(0, 5, "FECHADA", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 6, "Notas Fiscais de Apara", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(1)
+    headers_nf = ["NF", "Fornecedor", "Tipo", "Qtd", "Peso (kg)"]
+    col_w_nf = [30, 50, 25, 25, 50]
     rows_nf = []
     for nf in (nfs or []):
         rows_nf.append([
@@ -208,10 +243,13 @@ def gerar_pdf_fechamento_op_lavacao(
             str(nf.get("peso_kg", "")),
         ])
     _add_table(pdf, headers_nf, rows_nf, col_w_nf)
+    pdf.ln(3)
 
-    _section_title(pdf, "Producao Realizada por NF")
-    headers_prod = ["NF", "Tipo", "Qtd Plan.", "Qtd Real.", "Peso Plan. (kg)", "Peso Real. (kg)", "% Concl."]
-    col_w_prod = [25, 22, 22, 22, 28, 28, 22]
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 6, "Producao Realizada por NF", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(1)
+    headers_prod = ["NF", "Tipo", "Qtd Plan.", "Qtd Real.", "Peso Plan.", "Peso Real.", "% Concl."]
+    col_w_prod = [25, 22, 23, 23, 27, 27, 22]
     rows_prod = []
     for p in (producao_por_nf or []):
         rows_prod.append([
@@ -224,20 +262,34 @@ def gerar_pdf_fechamento_op_lavacao(
             f"{p.get('perc', 0):.1f}%",
         ])
     _add_table(pdf, headers_prod, rows_prod, col_w_prod)
+    pdf.ln(3)
 
-    _section_title(pdf, "Perdas")
-    _add_field(pdf, "Lixo (kg)", f"{perdas.get('lixo', 0):.1f}")
-    _add_field(pdf, "Papelao (kg)", f"{perdas.get('papelao', 0):.1f}")
-    _add_field(pdf, "Plastico Colorido (kg)", f"{perdas.get('colorido', 0):.1f}")
-    _add_field(pdf, "Total Perdas (kg)", f"{perdas.get('total', 0):.1f}")
-    _add_field(pdf, "% Perda", f"{perdas.get('percentual', 0):.1f}%")
+    peso_entrada = perdas.get('peso_entrada', 0)
+    perda_total = perdas.get('total', 0)
+    perc_perda = perdas.get('percentual', 0)
+    peso_liq = peso_entrada - perda_total
 
-    _section_title(pdf, "Resumo Final")
-    _add_field(pdf, "Peso Total Entrada", f"{perdas.get('peso_entrada', 0):.1f} kg")
-    _add_field(pdf, "Peso Total Perdas", f"{perdas.get('total', 0):.1f} kg")
-    _add_field(pdf, "Peso Liquido", f"{perdas.get('peso_entrada', 0) - perdas.get('total', 0):.1f} kg")
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 6, "Perdas e Resumo Final", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(1)
+    headers_res = ["Lixo (kg)", "Papelao (kg)", "Pl. Colorido (kg)", "Total Perdas (kg)", "% Perda", "Peso Entrada (kg)", "Peso Liquido (kg)"]
+    col_w_res = [24, 24, 28, 28, 20, 28, 28]
+    rows_res = [[
+        f"{perdas.get('lixo', 0):.1f}",
+        f"{perdas.get('papelao', 0):.1f}",
+        f"{perdas.get('colorido', 0):.1f}",
+        f"{perda_total:.1f}",
+        f"{perc_perda:.1f}%",
+        f"{peso_entrada:.1f}",
+        f"{peso_liq:.1f}",
+    ]]
+    _add_table(pdf, headers_res, rows_res, col_w_res)
 
-    pdf.ln(15)
+    y_remaining = pdf.h - 20 - pdf.get_y()
+    if y_remaining < 25:
+        pdf.add_page()
+    pdf.ln(max(10, y_remaining - 15))
+
     line_width = 70
     gap = (pdf.w - pdf.l_margin - pdf.r_margin - 2 * line_width) / 3
     y_sig = pdf.get_y()
