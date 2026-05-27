@@ -109,6 +109,11 @@ with tab_lote:
                     options=["Nao", "Sim"],
                     help="Houve troca de telas neste lote?",
                 )
+                qtd_troca_telas = 0
+                if troca_telas == "Sim":
+                    qtd_troca_telas = st.number_input(
+                        "Quantidade de Trocas", min_value=1, step=1, value=1,
+                    )
             with col_f2:
                 observacao_lote = st.text_input("Observacao")
                 registrado_por = st.text_input("Registrado por")
@@ -144,7 +149,7 @@ with tab_lote:
                             "tipo_descricao": TIPOS_PRODUTO[tipo],
                             "extrusora": extrusora,
                             "peso_kg": peso_kg,
-                            "troca_telas": troca_telas,
+                            "troca_telas": f"Sim ({qtd_troca_telas})" if troca_telas == "Sim" else "Nao",
                             "mes": data_lote.month,
                             "ano": data_lote.year % 100,
                             "sequencial": sequencial,
@@ -199,7 +204,16 @@ with tab_lote:
         if registros_turno:
             total_lotes_t = len(registros_turno)
             total_kg_t = sum(float(r.get("peso_kg", 0) or 0) for r in registros_turno)
-            trocas_sim = sum(1 for r in registros_turno if str(r.get("troca_telas", "")).lower() == "sim")
+            trocas_total = 0
+            for r in registros_turno:
+                tt = str(r.get("troca_telas", ""))
+                if tt.startswith("Sim"):
+                    try:
+                        qtd = int(tt.split("(")[1].replace(")", ""))
+                        trocas_total += qtd
+                    except (IndexError, ValueError):
+                        trocas_total += 1
+            trocas_sim = trocas_total
             col_rt1, col_rt2, col_rt3 = st.columns(3)
             col_rt1.metric("Lotes no Turno", total_lotes_t)
             col_rt2.metric("Peso Total", formatar_peso(total_kg_t))
