@@ -8,16 +8,17 @@ from utils.database import read_sheet, read_sheet_no_cache
 from utils.formatters import formatar_data, formatar_peso
 
 try:
-    from utils.pdf_generator import gerar_pdf_laudo_tecnico
+    from utils.pdf_generator import gerar_pdf_laudo_tecnico, gerar_pdf_laudo_rastreabilidade
 except ImportError:
     gerar_pdf_laudo_tecnico = None
+    gerar_pdf_laudo_rastreabilidade = None
 
 # ---------------------------------------------------------------------------
 # Titulo
 # ---------------------------------------------------------------------------
-st.header("Laudos Tecnicos")
+st.header("Laudos")
 
-tab_gerar, tab_historico = st.tabs(["Gerar Laudo", "Historico"])
+tab_gerar, tab_rastreio, tab_historico = st.tabs(["Laudo Tecnico", "Laudo de Rastreabilidade", "Historico"])
 
 # ===========================================================================
 # TAB: Gerar Laudo
@@ -174,6 +175,143 @@ with tab_gerar:
                             )
                         except Exception as exc:
                             st.error(f"Erro ao gerar PDF do laudo: {exc}")
+
+
+# ===========================================================================
+# TAB: Laudo de Rastreabilidade
+# ===========================================================================
+with tab_rastreio:
+    st.subheader("Laudo de Rastreabilidade")
+
+    try:
+        df_rom_rast = read_sheet_no_cache("romaneio")
+    except Exception:
+        df_rom_rast = pd.DataFrame()
+
+    if df_rom_rast.empty:
+        st.info("Nenhum romaneio encontrado.")
+    else:
+        opcoes_rast = {}
+        for _, row in df_rom_rast.iterrows():
+            numero = row.get("numero_pedido", "")
+            cliente = row.get("cliente", "")
+            data = formatar_data(row.get("data", ""))
+            label = f"{numero} - Cliente: {cliente} - Data: {data}"
+            opcoes_rast[label] = row.to_dict()
+
+        rast_label = st.selectbox("Selecione o Romaneio", options=list(opcoes_rast.keys()), key="rast_rom_select")
+
+        if rast_label:
+            rast_info = opcoes_rast[rast_label]
+            rast_id = rast_info.get("id", "")
+
+            st.markdown(f"**Romaneio:** {rast_info.get('numero_pedido', '')} | **Cliente:** {rast_info.get('cliente', '')} | **Data:** {formatar_data(rast_info.get('data', ''))}")
+
+            try:
+                df_itens_rast = read_sheet_no_cache("romaneio_itens")
+                df_ext_rast = read_sheet("producao_extrusao")
+                df_ops_ext_rast = read_sheet("op_extrusao")
+                df_ops_lav_rast = read_sheet("op_lavacao")
+                df_nfs_rast = read_sheet("op_lavacao_nfs")
+                df_qual_rast = read_sheet("qualidade")
+            except Exception:
+                df_itens_rast = pd.DataFrame()
+                df_ext_rast = pd.DataFrame()
+                df_ops_ext_rast = pd.DataFrame()
+                df_ops_lav_rast = pd.DataFrame()
+                df_nfs_rast = pd.DataFrame()
+                df_qual_rast = pd.DataFrame()
+
+            if df_itens_rast.empty:
+                st.warning("Nenhum item encontrado.")
+            else:
+                itens_rom_rast = df_itens_rast[df_itens_rast["romaneio_id"] == rast_id]
+
+                if itens_rom_rast.empty:
+                    st.warning("Nenhum item neste romaneio.")
+                else:
+                    itens_rastreio = []
+                    for _, item in itens_rom_rast.iterrows():
+                        codigo_lote = str(item.get("codigo_lote", ""))
+                        peso_kg = item.get("peso_kg", 0)
+
+                        ope = ""
+                        opl = ""
+                        origem = ""
+                        nfs_mp = []
+                        grade = ""
+                        cor = ""
+
+                        if not df_ext_rast.empty and "codigo_lote" in df_ext_rast.columns:
+                            lote_row = df_ext_rast[df_ext_rast["codigo_lote"].astype(str) == codigo_lote]
+                            if not lote_row.empty:
+                                lote_data = lote_row.iloc[0]
+                                ope = str(lote_data.get("numero_op", ""))
+                                opl = str(lote_data.get("opl_origem", ""))
+
+                                if ope and not df_ops_ext_rast.empty:
+                                    ope_row = df_ops_ext_rast[df_ops_ext_rast["numero_op"].astype(str) == ope]
+                                    if not ope_row.empty:
+                                        origem = str(ope_row.iloc[0].get("origem", ""))
+
+                                if opl and not df_ops_lav_rast.empty and not df_nfs_rast.empty:
+                                    opl_row = df_ops_lav_rast[df_ops_lav_rast["numero_op"].astype(str) == opl]
+                                    if not opl_row.empty:
+                                        opl_id = str(opl_row.iloc[0]["id"])
+                                        nfs_da_opl = df_nfs_rast[df_nfs_rast["op_lavacao_id"].astype(str) == opl_id]
+                                        if not nfs_da_opl.empty:
+                                            nfs_mp = nfs_da_opl["nf_apara"].astype(str).tolist()
+
+                        if not df_qual_rast.empty and "codigo_lote" in df_qual_rast.columns:
+                            qual_match = df_qual_rast[df_qual_rast["codigo_lote"].astype(str) == codigo_lote]
+                            if not qual_match.empty:
+                                grade = str(qual_match.iloc[-1].get("grade", ""))
+                                cor = str(qual_match.iloc[-1].get("cor", ""))
+
+                        itens_rastreio.append({
+                            "codigo_lote": codigo_lote,
+                            "peso_kg": peso_kg,
+                            "ope": ope,
+                            "origem": origem,
+                            "opl": opl,
+                            "nfs_mp": nfs_mp,
+                            "grade": grade,
+                            "cor": cor,
+                        })
+
+                    df_rast_exibir = pd.DataFrame([
+                        {
+                            "Lote": i["codigo_lote"],
+                            "Peso (kg)": i["peso_kg"],
+                            "OPE": i["ope"],
+                            "Origem": i["origem"],
+                            "OPL": i["opl"],
+                            "NFs MP": ", ".join(i["nfs_mp"]) if isinstance(i["nfs_mp"], list) else i["nfs_mp"],
+                            "Grade": i["grade"],
+                            "Cor": i["cor"],
+                        }
+                        for i in itens_rastreio
+                    ])
+
+                    st.markdown("#### Rastreabilidade dos Lotes")
+                    st.dataframe(df_rast_exibir, use_container_width=True, hide_index=True)
+
+                    st.divider()
+                    if gerar_pdf_laudo_rastreabilidade is None:
+                        st.warning("Modulo PDF nao disponivel.")
+                    else:
+                        try:
+                            pdf_rast = gerar_pdf_laudo_rastreabilidade(rast_info, itens_rastreio)
+                            st.download_button(
+                                "Baixar Laudo de Rastreabilidade (PDF)",
+                                pdf_rast,
+                                file_name=f"rastreabilidade_{rast_info.get('numero_pedido', 'ROM')}.pdf",
+                                mime="application/pdf",
+                                type="primary",
+                                use_container_width=True,
+                            )
+                        except Exception as exc:
+                            st.error(f"Erro ao gerar PDF: {exc}")
 
 
 # ===========================================================================

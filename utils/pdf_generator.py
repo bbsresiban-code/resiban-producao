@@ -652,3 +652,76 @@ def gerar_pdf_laudo_tecnico(romaneio: dict, itens_qualidade: list[dict]) -> byte
     pdf.cell(line_width, 5, "Responsavel Tecnico", align="C")
 
     return _to_bytes(pdf)
+
+
+# ---------------------------------------------------------------------------
+# 7. Laudo de Rastreabilidade
+# ---------------------------------------------------------------------------
+
+def gerar_pdf_laudo_rastreabilidade(romaneio: dict, itens_rastreio: list[dict]) -> bytes:
+    pdf = _create_pdf()
+    _header(pdf, "LAUDO DE RASTREABILIDADE")
+
+    numero = romaneio.get("numero_romaneio", romaneio.get("numero_pedido", ""))
+    cliente = romaneio.get("cliente", "")
+    data_doc = romaneio.get("data", "")
+
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 7, f"Referente ao Romaneio {numero} - Cliente: {cliente}",
+             align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 7, f"Data: {data_doc}", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(0, 5, "Este documento certifica a rastreabilidade completa dos lotes enviados,",
+             align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, "desde a origem da materia-prima ate o produto final.",
+             align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+
+    headers = ["Lote", "Peso (kg)", "OPE", "Origem", "OPL", "NFs de MP", "Grade", "Cor"]
+    col_w = [24, 18, 18, 18, 18, 38, 22, 18]
+    rows = []
+    for item in (itens_rastreio or []):
+        nfs = item.get("nfs_mp", "")
+        if isinstance(nfs, list):
+            nfs = ", ".join(nfs)
+        rows.append([
+            str(item.get("codigo_lote", "")),
+            str(item.get("peso_kg", "")),
+            str(item.get("ope", "")),
+            str(item.get("origem", "")),
+            str(item.get("opl", "")),
+            str(nfs),
+            str(item.get("grade", "")),
+            str(item.get("cor", "")),
+        ])
+    _add_table(pdf, headers, rows, col_w)
+
+    pdf.ln(6)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 7, "Cadeia de rastreabilidade certificada pela Resiban - Resinas Bandeirante LTDA.",
+             align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, "Material 100% pos-consumo reciclado (PCR).",
+             align="C", new_x="LMARGIN", new_y="NEXT")
+
+    y_remaining = pdf.h - 20 - pdf.get_y()
+    if y_remaining < 25:
+        pdf.add_page()
+    pdf.ln(max(10, y_remaining - 15))
+
+    line_width = 70
+    gap = (pdf.w - pdf.l_margin - pdf.r_margin - 2 * line_width) / 3
+    y_sig = pdf.get_y()
+    pdf.set_font("Helvetica", "", 9)
+    x1 = pdf.l_margin + gap
+    pdf.line(x1, y_sig, x1 + line_width, y_sig)
+    pdf.set_xy(x1, y_sig + 2)
+    pdf.cell(line_width, 5, "Responsavel Tecnico", align="C")
+    x2 = x1 + line_width + gap
+    pdf.line(x2, y_sig, x2 + line_width, y_sig)
+    pdf.set_xy(x2, y_sig + 2)
+    pdf.cell(line_width, 5, "Direcao", align="C")
+
+    return _to_bytes(pdf)
