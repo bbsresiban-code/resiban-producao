@@ -104,6 +104,11 @@ with tab_lote:
                     "Peso (kg)", min_value=0.0, step=0.5, format="%.1f"
                 )
                 hora = st.time_input("Hora", value=time(8, 0))
+                troca_telas = st.selectbox(
+                    "Troca de Telas",
+                    options=["Nao", "Sim"],
+                    help="Houve troca de telas neste lote?",
+                )
             with col_f2:
                 observacao_lote = st.text_input("Observacao")
                 registrado_por = st.text_input("Registrado por")
@@ -139,6 +144,7 @@ with tab_lote:
                             "tipo_descricao": TIPOS_PRODUTO[tipo],
                             "extrusora": extrusora,
                             "peso_kg": peso_kg,
+                            "troca_telas": troca_telas,
                             "mes": data_lote.month,
                             "ano": data_lote.year % 100,
                             "sequencial": sequencial,
@@ -153,42 +159,76 @@ with tab_lote:
                             f"### Codigo: `{codigo_lote}`"
                         )
                         st.balloons()
-
-                        # Botao para baixar PDF da producao do dia/turno
-                        if gerar_pdf_producao_extrusao is not None:
-                            try:
-                                data_str = data_lote.isoformat()
-                                df_reg = read_sheet("producao_extrusao")
-                                df_manut = read_sheet("manutencao_extrusao")
-                                registros_list = []
-                                manutencao_list = []
-                                if not df_reg.empty:
-                                    registros_list = df_reg[
-                                        (df_reg["data"] == data_str) & (df_reg["turno"] == turno)
-                                    ].to_dict("records")
-                                if not df_manut.empty:
-                                    manutencao_list = df_manut[
-                                        (df_manut["data"] == data_str) & (df_manut["turno"] == turno)
-                                    ].to_dict("records")
-                                pdf_bytes = gerar_pdf_producao_extrusao(
-                                    data_str, turno, registros_list, manutencao_list
-                                )
-                                st.download_button(
-                                    "Baixar PDF da Producao",
-                                    pdf_bytes,
-                                    file_name=f"producao_extrusao_{data_str}_{turno}.pdf",
-                                    mime="application/pdf",
-                                )
-                            except Exception:
-                                pass
                     except Exception as exc:
                         st.error(f"Erro ao registrar lote: {exc}")
+
+        # ---------------------------------------------------------------
+        # Relatorio do Turno (PDF consolidado)
+        # ---------------------------------------------------------------
+        st.divider()
+        st.subheader("Relatorio do Turno")
+
+        data_str_turno = data_lote.isoformat()
+        try:
+            df_turno_ext = read_sheet("producao_extrusao")
+            df_manut_turno = read_sheet("manutencao_extrusao")
+        except Exception:
+            df_turno_ext = pd.DataFrame()
+            df_manut_turno = pd.DataFrame()
+
+        registros_turno = []
+        if not df_turno_ext.empty:
+            mask_t = (
+                (df_turno_ext["data"].astype(str) == data_str_turno)
+                & (df_turno_ext["turno"].astype(str) == turno)
+            )
+            df_turno_f = df_turno_ext[mask_t]
+            if not df_turno_f.empty:
+                registros_turno = df_turno_f.to_dict("records")
+
+        manutencao_turno = []
+        if not df_manut_turno.empty:
+            mask_m = (
+                (df_manut_turno["data"].astype(str) == data_str_turno)
+                & (df_manut_turno["turno"].astype(str) == turno)
+            )
+            df_manut_f = df_manut_turno[mask_m]
+            if not df_manut_f.empty:
+                manutencao_turno = df_manut_f.to_dict("records")
+
+        if registros_turno:
+            total_lotes_t = len(registros_turno)
+            total_kg_t = sum(float(r.get("peso_kg", 0) or 0) for r in registros_turno)
+            trocas_sim = sum(1 for r in registros_turno if str(r.get("troca_telas", "")).lower() == "sim")
+            col_rt1, col_rt2, col_rt3 = st.columns(3)
+            col_rt1.metric("Lotes no Turno", total_lotes_t)
+            col_rt2.metric("Peso Total", formatar_peso(total_kg_t))
+            col_rt3.metric("Trocas de Tela", trocas_sim)
+
+            if gerar_pdf_producao_extrusao is not None:
+                try:
+                    pdf_bytes = gerar_pdf_producao_extrusao(
+                        data_str_turno, turno, registros_turno, manutencao_turno
+                    )
+                    st.download_button(
+                        "Baixar PDF do Turno",
+                        pdf_bytes,
+                        file_name=f"extrusao_{data_str_turno}_{turno}.pdf",
+                        mime="application/pdf",
+                        type="primary",
+                        use_container_width=True,
+                    )
+                except Exception:
+                    pass
+        else:
+            st.info("Nenhum lote registrado neste turno ainda.")
 
 # ---------------------------------------------------------------------------
 # Tab: Manutencao
 # ---------------------------------------------------------------------------
 with tab_manut:
     st.subheader("Registro de Manutencao - Extrusao")
+    st.caption("Troca de telas e registrada junto ao lote na aba 'Novo Lote'.")
 
     with st.form("form_manutencao_extrusao", clear_on_submit=True):
         col_m1, col_m2 = st.columns(2)
@@ -200,10 +240,9 @@ with tab_manut:
             else:
                 turno_manut = st.selectbox("Turno", options=TURNOS, key="manut_turno")
         with col_m2:
-            troca_telas = st.text_input("Troca de Telas")
             limpeza_gaveta = st.text_input("Limpeza de Gaveta")
+            troca_facas = st.text_input("Troca de Facas")
 
-        troca_facas = st.text_input("Troca de Facas")
         observacao_manut = st.text_area("Observacao")
 
         submitted_manut = st.form_submit_button(
@@ -215,7 +254,7 @@ with tab_manut:
                 dados_manut = {
                     "data": data_manut.isoformat(),
                     "turno": turno_manut,
-                    "troca_telas": troca_telas.strip(),
+                    "troca_telas": "",
                     "limpeza_gaveta": limpeza_gaveta.strip(),
                     "troca_facas": troca_facas.strip(),
                     "observacao": observacao_manut.strip(),
@@ -281,7 +320,8 @@ with tab_hist:
             colunas_exibir = [
                 c for c in [
                     "codigo_lote", "data", "turno", "numero_op", "extrusora",
-                    "tipo_descricao", "peso_kg", "status", "registrado_por",
+                    "tipo_descricao", "peso_kg", "troca_telas", "status",
+                    "registrado_por",
                 ] if c in df_filtrado.columns
             ]
 
