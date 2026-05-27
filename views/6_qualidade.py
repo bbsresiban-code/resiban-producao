@@ -93,7 +93,30 @@ with tab_analisar:
                         )
 
                     with col2:
-                        grade = st.selectbox("Grade", options=GRADES)
+                        def _grade_por_mfi(mfi_str):
+                            try:
+                                v = float(str(mfi_str).replace(",", "."))
+                            except (ValueError, TypeError):
+                                return ""
+                            if v <= 0.29:
+                                return "RESI03CR"
+                            elif v <= 0.79:
+                                return "RESI02CI"
+                            elif v <= 1.2:
+                                return "RESI01C"
+                            elif v <= 1.99:
+                                return "RESI04CS"
+                            elif v <= 6.0:
+                                return "RESI06S"
+                            return ""
+
+                        grade_auto = _grade_por_mfi(mfi_txt)
+                        if grade_auto:
+                            st.success(f"Grade sugerido: **{grade_auto}**")
+                            idx_grade = GRADES.index(grade_auto) if grade_auto in GRADES else 0
+                        else:
+                            idx_grade = 0
+                        grade = st.selectbox("Grade", options=GRADES, index=idx_grade)
                         cor = st.selectbox("Cor", options=CORES)
                         analista = st.text_input("Analista")
                         data_analise = st.date_input("Data da Analise", value=date.today())
