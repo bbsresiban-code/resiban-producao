@@ -100,9 +100,6 @@ with tab_analisar:
                     with col2:
                         grade = st.selectbox("Grade", options=GRADES)
                         cor = st.selectbox("Cor", options=CORES)
-                        local_estoque = st.selectbox(
-                            "Local de Estoque", options=LOCAIS_ESTOQUE
-                        )
                         analista = st.text_input("Analista")
                         data_analise = st.date_input("Data da Analise", value=date.today())
 
@@ -131,7 +128,7 @@ with tab_analisar:
                                 "teste_filme": teste_filme,
                                 "grade": grade,
                                 "cor": cor,
-                                "local_estoque": local_estoque,
+                                "local_estoque": "",
                                 "analista": analista.strip(),
                                 "data_analise": data_analise.isoformat(),
                                 "observacao": observacao.strip(),
