@@ -486,6 +486,11 @@ with tab_consultar:
             except Exception:
                 df_nfs_all = pd.DataFrame()
 
+            try:
+                df_prod_consulta = read_sheet("producao_lavacao")
+            except Exception:
+                df_prod_consulta = pd.DataFrame()
+
             for _, row in df_filtrado.iterrows():
                 with st.expander(f"OP {row['numero_op']} - {formatar_data(row['data'])} - {row['status']}"):
                     col_det1, col_det2, col_det3 = st.columns(3)
@@ -498,6 +503,37 @@ with tab_consultar:
                     with col_det3:
                         st.markdown(f"**Indice Fluidez:** {row['indice_fluidez']}")
                         st.markdown(f"**Observacao:** {row.get('observacao', '')}")
+
+                    # Perdas da OP
+                    peso_entrada = 0.0
+                    perda_lixo = 0.0
+                    perda_papelao = 0.0
+                    perda_colorido = 0.0
+                    perda_total = 0.0
+                    if not df_prod_consulta.empty and "numero_op" in df_prod_consulta.columns:
+                        prod_op = df_prod_consulta[df_prod_consulta["numero_op"].astype(str) == str(row["numero_op"])]
+                        if not prod_op.empty:
+                            fardos = prod_op[prod_op["tipo_fardo"].astype(str).str.lower() != "perdas"]
+                            perdas = prod_op[prod_op["tipo_fardo"].astype(str).str.lower() == "perdas"]
+                            if not fardos.empty:
+                                peso_entrada = float(pd.to_numeric(fardos["peso_kg"], errors="coerce").fillna(0).sum())
+                            if not perdas.empty:
+                                perda_lixo = float(pd.to_numeric(perdas.get("perda_lixo_kg", 0), errors="coerce").fillna(0).sum())
+                                perda_papelao = float(pd.to_numeric(perdas.get("perda_papelao_kg", 0), errors="coerce").fillna(0).sum())
+                                perda_colorido = float(pd.to_numeric(perdas.get("perda_plastico_colorido_kg", 0), errors="coerce").fillna(0).sum())
+                                perda_total = float(pd.to_numeric(perdas.get("perda_total_kg", 0), errors="coerce").fillna(0).sum())
+
+                    perc_perda = (perda_total / peso_entrada * 100) if peso_entrada > 0 else 0.0
+
+                    st.divider()
+                    st.caption("Perdas da OP")
+                    col_p1, col_p2, col_p3, col_p4 = st.columns(4)
+                    col_p1.metric("Lixo", formatar_peso(perda_lixo))
+                    col_p2.metric("Papelao", formatar_peso(perda_papelao))
+                    col_p3.metric("Pl. Colorido", formatar_peso(perda_colorido))
+                    col_p4.metric("Total Perdas", f"{formatar_peso(perda_total)} ({perc_perda:.1f}%)")
+
+                    st.divider()
 
                     nfs_lista = []
                     if not df_nfs_all.empty:
