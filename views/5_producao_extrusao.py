@@ -97,21 +97,41 @@ with tab_lote:
         st.info(f"Codigo do lote (preview): **{codigo_preview}**")
 
         # --- Troca de telas (fora do form para condicional dinamica) ---
-        col_tt1, col_tt2 = st.columns(2)
-        with col_tt1:
-            troca_telas = st.selectbox(
-                "Troca de Telas",
-                options=["Nao", "Sim"],
-                help="Houve troca de telas neste lote?",
-                key="lote_troca_telas",
-            )
-        with col_tt2:
-            qtd_troca_telas = 0
-            if troca_telas == "Sim":
-                qtd_troca_telas = st.number_input(
-                    "Quantas telas foram trocadas?", min_value=1, step=1, value=1,
-                    key="lote_qtd_telas",
+        st.markdown("**Troca de Telas**")
+        qtd_troca_telas = 0
+        qtd_1o_estagio = 0
+        qtd_2o_estagio = 0
+        troca_telas = "Nao"
+
+        if extrusora == "A":
+            st.caption("Extrusora A: informar trocas do 1o e 2o estagio (obrigatorio).")
+            col_tt1, col_tt2 = st.columns(2)
+            with col_tt1:
+                qtd_1o_estagio = st.number_input(
+                    "Telas 1o Estagio", min_value=0, step=1, value=0,
+                    key="lote_telas_1e",
                 )
+            with col_tt2:
+                qtd_2o_estagio = st.number_input(
+                    "Telas 2o Estagio", min_value=0, step=1, value=0,
+                    key="lote_telas_2e",
+                )
+            qtd_troca_telas = qtd_1o_estagio + qtd_2o_estagio
+            troca_telas = "Sim"
+        else:
+            col_tt1, col_tt2 = st.columns(2)
+            with col_tt1:
+                troca_telas = st.selectbox(
+                    "Houve troca de telas?",
+                    options=["Nao", "Sim"],
+                    key="lote_troca_telas",
+                )
+            with col_tt2:
+                if troca_telas == "Sim":
+                    qtd_troca_telas = st.number_input(
+                        "Quantas telas?", min_value=1, step=1, value=1,
+                        key="lote_qtd_telas",
+                    )
 
         # --- Form for remaining fields ---
         with st.form("form_novo_lote", clear_on_submit=True):
@@ -135,6 +155,8 @@ with tab_lote:
                     erros.append("Peso deve ser maior que zero.")
                 if not registrado_por.strip():
                     erros.append("Campo 'Registrado por' e obrigatorio.")
+                if extrusora == "A" and qtd_troca_telas == 0:
+                    erros.append("Extrusora A: informe a quantidade de telas trocadas (1o e/ou 2o estagio).")
 
                 if erros:
                     for e in erros:
@@ -156,7 +178,7 @@ with tab_lote:
                             "tipo_descricao": TIPOS_PRODUTO[tipo],
                             "extrusora": extrusora,
                             "peso_kg": peso_kg,
-                            "troca_telas": f"Sim ({qtd_troca_telas})" if troca_telas == "Sim" else "Nao",
+                            "troca_telas": f"Sim (1E:{qtd_1o_estagio} 2E:{qtd_2o_estagio})" if extrusora == "A" else (f"Sim ({qtd_troca_telas})" if troca_telas == "Sim" else "Nao"),
                             "mes": data_lote.month,
                             "ano": data_lote.year % 100,
                             "sequencial": sequencial,
