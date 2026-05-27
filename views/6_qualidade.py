@@ -70,62 +70,65 @@ with tab_analisar:
                 codigo_lote_sel = lote_selecionado_label.split(" | ")[0]
 
                 st.divider()
+                st.markdown(f"**Lote:** `{codigo_lote_sel}`")
 
-                with st.form("form_analise_qualidade", clear_on_submit=True):
-                    st.markdown(f"**Lote:** `{codigo_lote_sel}`")
+                def _grade_por_mfi(mfi_str):
+                    try:
+                        v = float(str(mfi_str).replace(",", "."))
+                    except (ValueError, TypeError):
+                        return ""
+                    if v <= 0.29:
+                        return "RESI03CR"
+                    elif v <= 0.79:
+                        return "RESI02CI"
+                    elif v <= 1.2:
+                        return "RESI01C"
+                    elif v <= 1.99:
+                        return "RESI04CS"
+                    elif v <= 6.0:
+                        return "RESI06S"
+                    return ""
 
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        mfi_txt = st.text_input(
-                            "MFI (g/10min)", help="Use virgula ou ponto. Ex: 0,8 ou 1.3"
-                        )
-                        teor_cinzas_txt = st.text_input(
-                            "Teor de Cinzas (%) - opcional", help="Deixe vazio se nao aplicavel"
-                        )
-                        densidade_txt = st.text_input(
-                            "Densidade (g/cm3) - opcional", help="Deixe vazio se nao aplicavel"
-                        )
-                        umidade_txt = st.text_input(
-                            "Umidade (%)", help="Use virgula ou ponto. Ex: 0,5"
-                        )
-                        teste_filme = st.selectbox(
-                            "Teste de Filme", options=["OK", "Anomalia"]
-                        )
+                mfi_txt = st.text_input(
+                    "MFI (g/10min)", help="Use virgula ou ponto. Ex: 0,8 ou 1.3",
+                    key="qual_mfi",
+                )
 
-                    with col2:
-                        def _grade_por_mfi(mfi_str):
-                            try:
-                                v = float(str(mfi_str).replace(",", "."))
-                            except (ValueError, TypeError):
-                                return ""
-                            if v <= 0.29:
-                                return "RESI03CR"
-                            elif v <= 0.79:
-                                return "RESI02CI"
-                            elif v <= 1.2:
-                                return "RESI01C"
-                            elif v <= 1.99:
-                                return "RESI04CS"
-                            elif v <= 6.0:
-                                return "RESI06S"
-                            return ""
+                grade_auto = _grade_por_mfi(mfi_txt)
+                if grade_auto:
+                    st.success(f"Grade sugerido: **{grade_auto}**")
+                    idx_grade = GRADES.index(grade_auto) if grade_auto in GRADES else 0
+                else:
+                    idx_grade = 0
 
-                        grade_auto = _grade_por_mfi(mfi_txt)
-                        if grade_auto:
-                            st.success(f"Grade sugerido: **{grade_auto}**")
-                            idx_grade = GRADES.index(grade_auto) if grade_auto in GRADES else 0
-                        else:
-                            idx_grade = 0
-                        grade = st.selectbox("Grade", options=GRADES, index=idx_grade)
-                        cor = st.selectbox("Cor", options=CORES)
-                        analista = st.text_input("Analista")
-                        data_analise = st.date_input("Data da Analise", value=date.today())
-
-                    observacao = st.text_area("Observacao")
-
-                    submitted = st.form_submit_button(
-                        "Registrar Analise", type="primary", use_container_width=True
+                col1, col2 = st.columns(2)
+                with col1:
+                    grade = st.selectbox("Grade", options=GRADES, index=idx_grade, key="qual_grade")
+                    cor = st.selectbox("Cor", options=CORES, key="qual_cor")
+                    umidade_txt = st.text_input(
+                        "Umidade (%)", help="Use virgula ou ponto. Ex: 0,5",
+                        key="qual_umidade",
                     )
+                    teste_filme = st.selectbox(
+                        "Teste de Filme", options=["OK", "Anomalia"], key="qual_filme"
+                    )
+                with col2:
+                    teor_cinzas_txt = st.text_input(
+                        "Teor de Cinzas (%) - opcional", help="Deixe vazio se nao aplicavel",
+                        key="qual_cinzas",
+                    )
+                    densidade_txt = st.text_input(
+                        "Densidade (g/cm3) - opcional", help="Deixe vazio se nao aplicavel",
+                        key="qual_dens",
+                    )
+                    analista = st.text_input("Analista", key="qual_analista")
+                    data_analise = st.date_input("Data da Analise", value=date.today(), key="qual_data")
+
+                observacao = st.text_area("Observacao", key="qual_obs")
+
+                submitted = st.button(
+                    "Registrar Analise", type="primary", use_container_width=True
+                )
 
                 if submitted:
                     def _parse_numero(txt):
