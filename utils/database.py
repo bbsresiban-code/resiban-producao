@@ -30,7 +30,7 @@ def get_spreadsheet():
     return client.open(st.secrets["spreadsheet_name"])
 
 
-def read_sheet(worksheet_name: str, ttl: int = 60) -> pd.DataFrame:
+def read_sheet(worksheet_name: str, ttl: int = 120) -> pd.DataFrame:
     @st.cache_data(ttl=ttl)
     def _read(ws_name: str) -> pd.DataFrame:
         sp = get_spreadsheet()
@@ -43,12 +43,7 @@ def read_sheet(worksheet_name: str, ttl: int = 60) -> pd.DataFrame:
 
 
 def read_sheet_no_cache(worksheet_name: str) -> pd.DataFrame:
-    sp = get_spreadsheet()
-    ws = sp.worksheet(worksheet_name)
-    data = ws.get_all_records()
-    if not data:
-        return pd.DataFrame()
-    return pd.DataFrame(data)
+    return read_sheet(worksheet_name, ttl=15)
 
 
 def append_row(worksheet_name: str, data: dict) -> dict:
