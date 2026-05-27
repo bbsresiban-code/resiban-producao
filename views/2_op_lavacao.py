@@ -619,9 +619,50 @@ with tab_consultar:
                     else:
                         st.caption("Nenhuma NF vinculada a esta OP.")
 
-                    if gerar_pdf_op_lavacao is not None:
+                    op_dict = row.to_dict()
+                    is_fechada = str(row.get("status", "")).lower() == "fechada"
+
+                    if is_fechada and gerar_pdf_fechamento_op_lavacao is not None:
                         try:
-                            op_dict = row.to_dict()
+                            nfs_desta = df_nfs_all[df_nfs_all["op_lavacao_id"] == row["id"]] if not df_nfs_all.empty else pd.DataFrame()
+                            prod_op_c = df_prod_consulta[df_prod_consulta["numero_op"].astype(str) == str(row["numero_op"])] if not df_prod_consulta.empty else pd.DataFrame()
+
+                            prod_por_nf_c = []
+                            for _, nf_r in nfs_desta.iterrows():
+                                nf_num = str(nf_r["nf_apara"])
+                                qtd_p = int(nf_r.get("quant_fardos", 0) or 0)
+                                peso_p = float(nf_r.get("peso_kg", 0) or 0)
+                                qtd_r = 0
+                                peso_r = 0.0
+                                if not prod_op_c.empty and "nf" in prod_op_c.columns:
+                                    prod_nf = prod_op_c[(prod_op_c["nf"].astype(str) == nf_num) & (prod_op_c["tipo_fardo"].astype(str).str.lower() != "perdas")]
+                                    if not prod_nf.empty:
+                                        qtd_r = int(pd.to_numeric(prod_nf["quantidade"], errors="coerce").fillna(0).sum())
+                                        peso_r = float(pd.to_numeric(prod_nf["peso_kg"], errors="coerce").fillna(0).sum())
+                                perc_nf = (qtd_r / qtd_p * 100) if qtd_p > 0 else 0
+                                prod_por_nf_c.append({
+                                    "nf": nf_num, "tipo": str(nf_r.get("tipo_fardo", "")),
+                                    "qtd_plan": qtd_p, "qtd_real": qtd_r,
+                                    "peso_plan": peso_p, "peso_real": peso_r, "perc": perc_nf,
+                                })
+
+                            perdas_dict_c = {
+                                "lixo": perda_lixo, "papelao": perda_papelao,
+                                "colorido": perda_colorido, "total": perda_total,
+                                "percentual": perc_perda, "peso_entrada": peso_entrada,
+                            }
+                            pdf_bytes = gerar_pdf_fechamento_op_lavacao(op_dict, nfs_lista, prod_por_nf_c, perdas_dict_c)
+                            st.download_button(
+                                "Baixar PDF de Fechamento",
+                                pdf_bytes,
+                                file_name=f"Fechamento_{row['numero_op']}.pdf",
+                                mime="application/pdf",
+                                key=f"pdf_op_lav_{row['numero_op']}",
+                            )
+                        except Exception:
+                            pass
+                    elif gerar_pdf_op_lavacao is not None:
+                        try:
                             pdf_bytes = gerar_pdf_op_lavacao(op_dict, nfs_lista)
                             st.download_button(
                                 "Baixar PDF da OP",
