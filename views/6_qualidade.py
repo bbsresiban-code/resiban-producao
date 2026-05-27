@@ -80,13 +80,15 @@ with tab_analisar:
                             "MFI (g/10min)", min_value=0.0, step=0.01, format="%.2f"
                         )
                         teor_cinzas = st.number_input(
-                            "Teor de Cinzas (%)", min_value=0.0, step=0.01, format="%.2f"
+                            "Teor de Cinzas (%) - opcional", min_value=0.0, step=0.01, format="%.2f",
+                            help="Deixe 0 se nao aplicavel",
                         )
                         densidade = st.number_input(
-                            "Densidade (g/cm3)",
+                            "Densidade (g/cm3) - opcional",
                             min_value=0.0,
                             step=0.001,
                             format="%.3f",
+                            help="Deixe 0 se nao aplicavel",
                         )
                         umidade = st.number_input(
                             "Umidade (%)", min_value=0.0, step=0.01, format="%.2f"
@@ -123,8 +125,8 @@ with tab_analisar:
                             analise_data = {
                                 "codigo_lote": codigo_lote_sel,
                                 "mfi": mfi,
-                                "teor_cinzas": teor_cinzas,
-                                "densidade": densidade,
+                                "teor_cinzas": teor_cinzas if teor_cinzas > 0 else "",
+                                "densidade": densidade if densidade > 0 else "",
                                 "umidade": umidade,
                                 "teste_filme": teste_filme,
                                 "grade": grade,
