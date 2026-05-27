@@ -38,7 +38,6 @@ with tab_nova:
         origem = st.selectbox("Origem do Material", ["Proprio", "Servico"], key="ope_origem")
         produto = st.text_input("Produto", key="ope_prod")
         maquina = st.selectbox("Maquina", options=EXTRUSORAS, format_func=lambda x: f"Extrusora {x}", key="ope_maq")
-        coordenador = st.text_input("Coordenador", key="ope_coord")
 
     opl_vinculada = ""
     if origem == "Proprio":
@@ -86,7 +85,7 @@ with tab_nova:
                     "maquina": maquina,
                     "data_inicio": "",
                     "data_final": "",
-                    "coordenador": coordenador.strip(),
+                    "coordenador": "",
                     "producao_final_kg": "",
                     "perda_percentual": "",
                     "status": "aberta",
