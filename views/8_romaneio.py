@@ -152,13 +152,11 @@ with tab_novo:
             # -------------------------------------------------------------------
             st.markdown("#### Fechamento")
 
-            col_c1, col_c2 = st.columns(2)
-            with col_c1:
-                rom_serial = st.text_input("Serial", key="rom_serial")
-            with col_c2:
-                rom_registrado_por = st.text_input(
-                    "Registrado Por", key="rom_registrado_por"
-                )
+            rom_serial = proximo_sequencial("romaneio", "serial", "SER")
+            st.info(f"Serial: **{rom_serial}**")
+            rom_registrado_por = st.text_input(
+                "Registrado Por", key="rom_registrado_por"
+            )
 
             st.divider()
 
