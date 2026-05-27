@@ -76,22 +76,17 @@ with tab_analisar:
 
                     col1, col2 = st.columns(2)
                     with col1:
-                        mfi = st.number_input(
-                            "MFI (g/10min)", min_value=0.0, step=0.01, format="%.2f"
+                        mfi_txt = st.text_input(
+                            "MFI (g/10min)", help="Use virgula ou ponto. Ex: 0,8 ou 1.3"
                         )
-                        teor_cinzas = st.number_input(
-                            "Teor de Cinzas (%) - opcional", min_value=0.0, step=0.01, format="%.2f",
-                            help="Deixe 0 se nao aplicavel",
+                        teor_cinzas_txt = st.text_input(
+                            "Teor de Cinzas (%) - opcional", help="Deixe vazio se nao aplicavel"
                         )
-                        densidade = st.number_input(
-                            "Densidade (g/cm3) - opcional",
-                            min_value=0.0,
-                            step=0.001,
-                            format="%.3f",
-                            help="Deixe 0 se nao aplicavel",
+                        densidade_txt = st.text_input(
+                            "Densidade (g/cm3) - opcional", help="Deixe vazio se nao aplicavel"
                         )
-                        umidade = st.number_input(
-                            "Umidade (%)", min_value=0.0, step=0.01, format="%.2f"
+                        umidade_txt = st.text_input(
+                            "Umidade (%)", help="Use virgula ou ponto. Ex: 0,5"
                         )
                         teste_filme = st.selectbox(
                             "Teste de Filme", options=["OK", "Anomalia"]
@@ -110,9 +105,21 @@ with tab_analisar:
                     )
 
                 if submitted:
+                    def _parse_numero(txt):
+                        if not txt or not txt.strip():
+                            return ""
+                        return txt.strip().replace(",", ".")
+
+                    mfi = _parse_numero(mfi_txt)
+                    teor_cinzas = _parse_numero(teor_cinzas_txt)
+                    densidade = _parse_numero(densidade_txt)
+                    umidade = _parse_numero(umidade_txt)
+
                     erros = []
                     if not analista.strip():
                         erros.append("Analista e obrigatorio.")
+                    if not mfi:
+                        erros.append("MFI e obrigatorio.")
 
                     if erros:
                         for e in erros:
@@ -122,8 +129,8 @@ with tab_analisar:
                             analise_data = {
                                 "codigo_lote": codigo_lote_sel,
                                 "mfi": mfi,
-                                "teor_cinzas": teor_cinzas if teor_cinzas > 0 else "",
-                                "densidade": densidade if densidade > 0 else "",
+                                "teor_cinzas": teor_cinzas,
+                                "densidade": densidade,
                                 "umidade": umidade,
                                 "teste_filme": teste_filme,
                                 "grade": grade,
