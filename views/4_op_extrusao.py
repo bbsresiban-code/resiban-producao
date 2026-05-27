@@ -23,74 +23,92 @@ tab_nova, tab_consultar, tab_fechar = st.tabs(["Nova OP", "Consultar OPs", "Fech
 with tab_nova:
     st.subheader("Criar Nova Ordem de Producao - Extrusao")
 
-    with st.form("form_nova_op_extrusao", clear_on_submit=True):
-        col1, col2 = st.columns(2)
+    numero_op = proximo_sequencial("op_extrusao", "numero_op", "OPE")
+    st.info(f"Numero da OP: **{numero_op}**")
 
-        with col1:
-            numero_op = proximo_sequencial("op_extrusao", "numero_op", "OPE")
-            st.info(f"Numero da OP: **{numero_op}**")
-            data_op = st.date_input("Data", value=date.today())
-            responsavel = st.text_input("Responsavel")
-            cliente = st.text_input("Cliente")
-            volume_ton = st.number_input(
-                "Volume (ton)", min_value=0.0, step=0.5, format="%.1f"
-            )
+    col1, col2 = st.columns(2)
+    with col1:
+        data_op = st.date_input("Data", value=date.today(), key="ope_data")
+        responsavel = st.text_input("Responsavel", key="ope_resp")
+        cliente = st.text_input("Cliente", key="ope_cliente")
+        volume_ton = st.number_input(
+            "Volume (ton)", min_value=0.0, step=0.5, format="%.1f", key="ope_vol"
+        )
+    with col2:
+        origem = st.selectbox("Origem do Material", ["Proprio", "Servico"], key="ope_origem")
+        produto = st.text_input("Produto", key="ope_prod")
+        maquina = st.selectbox("Maquina", options=EXTRUSORAS, format_func=lambda x: f"Extrusora {x}", key="ope_maq")
+        coordenador = st.text_input("Coordenador", key="ope_coord")
 
-        with col2:
-            origem = st.selectbox("Origem do Material", ["Proprio", "Servico"])
-            produto = st.text_input("Produto")
-            maquina = st.selectbox("Maquina", options=EXTRUSORAS, format_func=lambda x: f"Extrusora {x}")
-            coordenador = st.text_input("Coordenador")
-            observacao = st.text_area("Observacao")
-
-        submitted = st.form_submit_button("Criar OP", use_container_width=True)
-
-        if submitted:
-            erros = []
-            if not responsavel.strip():
-                erros.append("Responsavel e obrigatorio.")
-
-            if erros:
-                for e in erros:
-                    st.error(e)
+    opl_vinculada = ""
+    if origem == "Proprio":
+        try:
+            df_opl = read_sheet("op_lavacao")
+            if not df_opl.empty:
+                opls_disponiveis = df_opl["numero_op"].astype(str).tolist()
+                opl_vinculada = st.selectbox(
+                    "OPL de Origem (rastreabilidade)",
+                    options=opls_disponiveis,
+                    key="ope_opl_origem",
+                )
             else:
-                try:
-                    tipo_lote = "01" if origem == "Proprio" else "02"
-                    dados = {
-                        "numero_op": numero_op.strip().upper(),
-                        "data": data_op.isoformat(),
-                        "responsavel": responsavel.strip(),
-                        "cliente": cliente.strip(),
-                        "volume_ton": volume_ton,
-                        "origem": origem,
-                        "tipo_lote": tipo_lote,
-                        "produto": produto.strip(),
-                        "maquina": maquina,
-                        "data_inicio": "",
-                        "data_final": "",
-                        "coordenador": coordenador.strip(),
-                        "producao_final_kg": "",
-                        "perda_percentual": "",
-                        "status": "aberta",
-                        "observacao": observacao.strip(),
-                    }
-                    append_row("op_extrusao", dados)
-                    st.success(f"OP {numero_op.strip().upper()} criada com sucesso!")
+                st.warning("Nenhuma OPL cadastrada.")
+        except Exception:
+            st.warning("Erro ao carregar OPLs.")
+    else:
+        st.info("Servico de industrializacao - sem vinculo com OPL.")
 
-                    # Botao para baixar PDF da OP recem-criada
-                    if gerar_pdf_op_extrusao is not None:
-                        try:
-                            pdf_bytes = gerar_pdf_op_extrusao(dados, [])
-                            st.download_button(
-                                "Baixar PDF da OP",
-                                pdf_bytes,
-                                file_name=f"{numero_op.strip().upper()}.pdf",
-                                mime="application/pdf",
-                            )
-                        except Exception:
-                            pass
-                except Exception as exc:
-                    st.error(f"Erro ao salvar OP: {exc}")
+    observacao = st.text_area("Observacao", key="ope_obs")
+
+    if st.button("Criar OP", type="primary", use_container_width=True, key="ope_criar"):
+        erros = []
+        if not responsavel.strip():
+            erros.append("Responsavel e obrigatorio.")
+        if origem == "Proprio" and not opl_vinculada:
+            erros.append("Selecione a OPL de origem.")
+
+        if erros:
+            for e in erros:
+                st.error(e)
+        else:
+            try:
+                tipo_lote = "01" if origem == "Proprio" else "02"
+                dados = {
+                    "numero_op": numero_op.strip().upper(),
+                    "data": data_op.isoformat(),
+                    "responsavel": responsavel.strip(),
+                    "cliente": cliente.strip(),
+                    "volume_ton": volume_ton,
+                    "origem": origem,
+                    "tipo_lote": tipo_lote,
+                    "opl_origem": opl_vinculada if origem == "Proprio" else "",
+                    "produto": produto.strip(),
+                    "maquina": maquina,
+                    "data_inicio": "",
+                    "data_final": "",
+                    "coordenador": coordenador.strip(),
+                    "producao_final_kg": "",
+                    "perda_percentual": "",
+                    "status": "aberta",
+                    "observacao": observacao.strip(),
+                }
+                append_row("op_extrusao", dados)
+                st.success(f"OP {numero_op.strip().upper()} criada com sucesso!")
+
+                # Botao para baixar PDF da OP recem-criada
+                if gerar_pdf_op_extrusao is not None:
+                    try:
+                        pdf_bytes = gerar_pdf_op_extrusao(dados, [])
+                        st.download_button(
+                            "Baixar PDF da OP",
+                            pdf_bytes,
+                            file_name=f"{numero_op.strip().upper()}.pdf",
+                            mime="application/pdf",
+                        )
+                    except Exception:
+                        pass
+            except Exception as exc:
+                st.error(f"Erro ao salvar OP: {exc}")
 
 # ---------------------------------------------------------------------------
 # Tab: Consultar OPs

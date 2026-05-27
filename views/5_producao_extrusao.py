@@ -62,15 +62,17 @@ with tab_lote:
         with col_s3:
             numero_op = st.selectbox("Numero da OP", options=ops_abertas, key="lote_op")
 
-        # Buscar tipo da OP selecionada
+        # Buscar tipo e OPL de origem da OP selecionada
         tipo = "01"
         origem_op = "Proprio"
+        opl_origem = ""
         try:
             op_sel_row = df_ops[df_ops["numero_op"] == numero_op].iloc[0]
             tipo_op = str(op_sel_row.get("tipo_lote", "")).strip()
             if tipo_op in ("01", "02"):
                 tipo = tipo_op
             origem_op = str(op_sel_row.get("origem", "Proprio"))
+            opl_origem = str(op_sel_row.get("opl_origem", ""))
         except Exception:
             pass
 
@@ -78,7 +80,10 @@ with tab_lote:
 
         col_t1, col_t2 = st.columns(2)
         with col_t1:
-            st.info(f"Origem: **{origem_op}** (Lote tipo **{tipo}** - {tipo_desc})")
+            info_origem = f"Origem: **{origem_op}** (Lote tipo **{tipo}** - {tipo_desc})"
+            if opl_origem:
+                info_origem += f"  \nOPL de origem: **{opl_origem}**"
+            st.info(info_origem)
         with col_t2:
             extrusora = st.radio(
                 "Extrusora",
@@ -128,6 +133,7 @@ with tab_lote:
                             "turno": turno,
                             "hora": hora.strftime("%H:%M"),
                             "numero_op": numero_op,
+                            "opl_origem": opl_origem,
                             "codigo_lote": codigo_lote,
                             "tipo": tipo,
                             "tipo_descricao": TIPOS_PRODUTO[tipo],
