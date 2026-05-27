@@ -176,6 +176,85 @@ def gerar_pdf_op_lavacao(op_data: dict, nfs: list[dict]) -> bytes:
 
 
 # ---------------------------------------------------------------------------
+# 1b. Fechamento de OP Lavacao (completo)
+# ---------------------------------------------------------------------------
+
+def gerar_pdf_fechamento_op_lavacao(
+    op_data: dict, nfs: list[dict], producao_por_nf: list[dict], perdas: dict
+) -> bytes:
+    pdf = _create_pdf()
+    numero = op_data.get("numero_op", "")
+    _header(pdf, f"FECHAMENTO DE OP LAVACAO - {numero}")
+
+    _add_field(pdf, "Numero OP", numero)
+    _add_field(pdf, "Data", op_data.get("data", ""))
+    _add_field(pdf, "Responsavel", op_data.get("responsavel", ""))
+    _add_field(pdf, "Cliente", op_data.get("cliente", ""))
+    _add_field(pdf, "Volume Planejado (ton)", op_data.get("volume_ton", op_data.get("volume", "")))
+    _add_field(pdf, "Produto", op_data.get("produto", ""))
+    _add_field(pdf, "Indice de Fluidez", op_data.get("indice_fluidez", ""))
+    _add_field(pdf, "Status", "FECHADA")
+
+    _section_title(pdf, "Notas Fiscais de Apara")
+    headers_nf = ["NF", "Fornecedor", "Tipo", "Qtd Plan.", "Peso Plan. (kg)"]
+    col_w_nf = [30, 40, 25, 25, 35]
+    rows_nf = []
+    for nf in (nfs or []):
+        rows_nf.append([
+            str(nf.get("nf_apara", "")),
+            str(nf.get("fornecedor", "")),
+            str(nf.get("tipo_fardo", "")),
+            str(nf.get("quant_fardos", "")),
+            str(nf.get("peso_kg", "")),
+        ])
+    _add_table(pdf, headers_nf, rows_nf, col_w_nf)
+
+    _section_title(pdf, "Producao Realizada por NF")
+    headers_prod = ["NF", "Tipo", "Qtd Plan.", "Qtd Real.", "Peso Plan. (kg)", "Peso Real. (kg)", "% Concl."]
+    col_w_prod = [25, 22, 22, 22, 28, 28, 22]
+    rows_prod = []
+    for p in (producao_por_nf or []):
+        rows_prod.append([
+            str(p.get("nf", "")),
+            str(p.get("tipo", "")),
+            str(p.get("qtd_plan", "")),
+            str(p.get("qtd_real", "")),
+            str(p.get("peso_plan", "")),
+            str(p.get("peso_real", "")),
+            f"{p.get('perc', 0):.1f}%",
+        ])
+    _add_table(pdf, headers_prod, rows_prod, col_w_prod)
+
+    _section_title(pdf, "Perdas")
+    _add_field(pdf, "Lixo (kg)", f"{perdas.get('lixo', 0):.1f}")
+    _add_field(pdf, "Papelao (kg)", f"{perdas.get('papelao', 0):.1f}")
+    _add_field(pdf, "Plastico Colorido (kg)", f"{perdas.get('colorido', 0):.1f}")
+    _add_field(pdf, "Total Perdas (kg)", f"{perdas.get('total', 0):.1f}")
+    _add_field(pdf, "% Perda", f"{perdas.get('percentual', 0):.1f}%")
+
+    _section_title(pdf, "Resumo Final")
+    _add_field(pdf, "Peso Total Entrada", f"{perdas.get('peso_entrada', 0):.1f} kg")
+    _add_field(pdf, "Peso Total Perdas", f"{perdas.get('total', 0):.1f} kg")
+    _add_field(pdf, "Peso Liquido", f"{perdas.get('peso_entrada', 0) - perdas.get('total', 0):.1f} kg")
+
+    pdf.ln(15)
+    line_width = 70
+    gap = (pdf.w - pdf.l_margin - pdf.r_margin - 2 * line_width) / 3
+    y_sig = pdf.get_y()
+    pdf.set_font("Helvetica", "", 9)
+    x1 = pdf.l_margin + gap
+    pdf.line(x1, y_sig, x1 + line_width, y_sig)
+    pdf.set_xy(x1, y_sig + 2)
+    pdf.cell(line_width, 5, "Responsavel", align="C")
+    x2 = x1 + line_width + gap
+    pdf.line(x2, y_sig, x2 + line_width, y_sig)
+    pdf.set_xy(x2, y_sig + 2)
+    pdf.cell(line_width, 5, "Gerente de Producao", align="C")
+
+    return _to_bytes(pdf)
+
+
+# ---------------------------------------------------------------------------
 # 2. Controle de Producao - Lavacao
 # ---------------------------------------------------------------------------
 

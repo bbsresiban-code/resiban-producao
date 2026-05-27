@@ -9,9 +9,10 @@ from utils.database import read_sheet, read_sheet_no_cache, append_row, update_r
 from utils.formatters import formatar_data, formatar_peso
 
 try:
-    from utils.pdf_generator import gerar_pdf_op_lavacao
+    from utils.pdf_generator import gerar_pdf_op_lavacao, gerar_pdf_fechamento_op_lavacao
 except ImportError:
     gerar_pdf_op_lavacao = None
+    gerar_pdf_fechamento_op_lavacao = None
 
 st.header("Ordem de Producao - Lavacao")
 
@@ -432,7 +433,72 @@ with tab_acompanhamento:
                                 update_rows("op_lavacao", "id", [str(op_id_sel)], "status", "fechada")
                                 st.toast("OP fechada com sucesso!")
                                 st.success(f"OP **{numero_op_sel}** fechada. Producao final: {formatar_peso(total_peso_real)} ({perc_geral:.1f}%)")
-                                st.rerun()
+
+                                # Gerar PDF de fechamento
+                                if gerar_pdf_fechamento_op_lavacao is not None:
+                                    try:
+                                        nfs_op_lista = nfs_da_op.to_dict("records") if not nfs_da_op.empty else []
+                                        prod_por_nf = []
+                                        for _, nf_r in nfs_da_op.iterrows():
+                                            nf_num = str(nf_r["nf_apara"])
+                                            qtd_p = int(nf_r.get("quant_fardos", 0) or 0)
+                                            peso_p = float(nf_r.get("peso_kg", 0) or 0)
+                                            qtd_r = 0
+                                            peso_r = 0.0
+                                            if not prod_da_op.empty and "nf" in prod_da_op.columns:
+                                                prod_nf = prod_da_op[prod_da_op["nf"].astype(str) == nf_num]
+                                                if not prod_nf.empty:
+                                                    qtd_r = int(pd.to_numeric(prod_nf["quantidade"], errors="coerce").fillna(0).sum())
+                                                    peso_r = float(pd.to_numeric(prod_nf["peso_kg"], errors="coerce").fillna(0).sum())
+                                            perc_nf = (qtd_r / qtd_p * 100) if qtd_p > 0 else 0
+                                            prod_por_nf.append({
+                                                "nf": nf_num,
+                                                "tipo": str(nf_r.get("tipo_fardo", "")),
+                                                "qtd_plan": qtd_p,
+                                                "qtd_real": qtd_r,
+                                                "peso_plan": peso_p,
+                                                "peso_real": peso_r,
+                                                "perc": perc_nf,
+                                            })
+
+                                        perda_lixo = 0.0
+                                        perda_papelao = 0.0
+                                        perda_colorido = 0.0
+                                        perda_total_val = 0.0
+                                        if not df_prod.empty and "numero_op" in df_prod.columns:
+                                            perdas_op = df_prod[
+                                                (df_prod["numero_op"].astype(str) == str(numero_op_sel))
+                                                & (df_prod.get("tipo_fardo", pd.Series(dtype=str)).astype(str).str.lower() == "perdas")
+                                            ]
+                                            if not perdas_op.empty:
+                                                perda_lixo = float(pd.to_numeric(perdas_op.get("perda_lixo_kg", 0), errors="coerce").fillna(0).sum())
+                                                perda_papelao = float(pd.to_numeric(perdas_op.get("perda_papelao_kg", 0), errors="coerce").fillna(0).sum())
+                                                perda_colorido = float(pd.to_numeric(perdas_op.get("perda_plastico_colorido_kg", 0), errors="coerce").fillna(0).sum())
+                                                perda_total_val = float(pd.to_numeric(perdas_op.get("perda_total_kg", 0), errors="coerce").fillna(0).sum())
+
+                                        perc_perda = (perda_total_val / total_peso_real * 100) if total_peso_real > 0 else 0
+
+                                        perdas_dict = {
+                                            "lixo": perda_lixo,
+                                            "papelao": perda_papelao,
+                                            "colorido": perda_colorido,
+                                            "total": perda_total_val,
+                                            "percentual": perc_perda,
+                                            "peso_entrada": total_peso_real,
+                                        }
+
+                                        pdf_bytes = gerar_pdf_fechamento_op_lavacao(
+                                            op_sel.to_dict(), nfs_op_lista, prod_por_nf, perdas_dict
+                                        )
+                                        st.download_button(
+                                            "Baixar PDF de Fechamento",
+                                            pdf_bytes,
+                                            file_name=f"Fechamento_{numero_op_sel}.pdf",
+                                            mime="application/pdf",
+                                            key="pdf_fechamento_op",
+                                        )
+                                    except Exception:
+                                        pass
                             except Exception as exc:
                                 st.error(f"Erro ao fechar OP: {exc}")
 
