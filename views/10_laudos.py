@@ -214,6 +214,7 @@ with tab_rastreio:
                 df_ops_lav_rast = read_sheet("op_lavacao")
                 df_nfs_rast = read_sheet("op_lavacao_nfs")
                 df_qual_rast = read_sheet("qualidade")
+                df_mistura_rast = read_sheet("mistura")
             except Exception:
                 df_itens_rast = pd.DataFrame()
                 df_ext_rast = pd.DataFrame()
@@ -221,6 +222,7 @@ with tab_rastreio:
                 df_ops_lav_rast = pd.DataFrame()
                 df_nfs_rast = pd.DataFrame()
                 df_qual_rast = pd.DataFrame()
+                df_mistura_rast = pd.DataFrame()
 
             if df_itens_rast.empty:
                 st.warning("Nenhum item encontrado.")
@@ -230,29 +232,34 @@ with tab_rastreio:
                 if itens_rom_rast.empty:
                     st.warning("Nenhum item neste romaneio.")
                 else:
-                    itens_rastreio = []
-                    for _, item in itens_rom_rast.iterrows():
-                        codigo_lote = str(item.get("codigo_lote", ""))
-                        peso_kg = item.get("peso_kg", 0)
-
+                    def rastrear_lote(codigo_lote, peso_kg):
                         ope = ""
                         opl = ""
                         origem = ""
                         nfs_mp = []
                         grade = ""
                         cor = ""
+                        lotes_mistura = ""
 
                         if not df_ext_rast.empty and "codigo_lote" in df_ext_rast.columns:
                             lote_row = df_ext_rast[df_ext_rast["codigo_lote"].astype(str) == codigo_lote]
                             if not lote_row.empty:
                                 lote_data = lote_row.iloc[0]
+                                tipo_lote = str(lote_data.get("tipo", ""))
                                 ope = str(lote_data.get("numero_op", ""))
                                 opl = str(lote_data.get("opl_origem", ""))
 
-                                if ope and not df_ops_ext_rast.empty:
-                                    ope_row = df_ops_ext_rast[df_ops_ext_rast["numero_op"].astype(str) == ope]
-                                    if not ope_row.empty:
-                                        origem = str(ope_row.iloc[0].get("origem", ""))
+                                if tipo_lote == "06" and not df_mistura_rast.empty:
+                                    mix = df_mistura_rast[df_mistura_rast["codigo_lote_mistura"].astype(str) == codigo_lote]
+                                    if not mix.empty:
+                                        lotes_mistura = str(mix.iloc[0].get("lotes_entrada", ""))
+                                        origem = "Mistura"
+
+                                if not origem:
+                                    if ope and not df_ops_ext_rast.empty:
+                                        ope_row = df_ops_ext_rast[df_ops_ext_rast["numero_op"].astype(str) == ope]
+                                        if not ope_row.empty:
+                                            origem = str(ope_row.iloc[0].get("origem", ""))
 
                                 if opl and not df_ops_lav_rast.empty and not df_nfs_rast.empty:
                                     opl_row = df_ops_lav_rast[df_ops_lav_rast["numero_op"].astype(str) == opl]
@@ -268,16 +275,39 @@ with tab_rastreio:
                                 grade = str(qual_match.iloc[-1].get("grade", ""))
                                 cor = str(qual_match.iloc[-1].get("cor", ""))
 
-                        itens_rastreio.append({
+                        return {
                             "codigo_lote": codigo_lote,
                             "peso_kg": peso_kg,
                             "ope": ope,
                             "origem": origem,
                             "opl": opl,
                             "nfs_mp": nfs_mp,
+                            "lotes_mistura": lotes_mistura,
                             "grade": grade,
                             "cor": cor,
-                        })
+                        }
+
+                    itens_rastreio = []
+                    for _, item in itens_rom_rast.iterrows():
+                        codigo_lote = str(item.get("codigo_lote", ""))
+                        peso_kg = item.get("peso_kg", 0)
+                        rastreio = rastrear_lote(codigo_lote, peso_kg)
+
+                        if rastreio["origem"] == "Mistura" and rastreio["lotes_mistura"]:
+                            rastreio["nfs_mp"] = []
+                            lotes_entrada = [l.strip() for l in rastreio["lotes_mistura"].split(",") if l.strip()]
+                            sub_nfs = set()
+                            sub_opls = set()
+                            for sub_lote in lotes_entrada:
+                                sub = rastrear_lote(sub_lote, 0)
+                                if sub["opl"]:
+                                    sub_opls.add(sub["opl"])
+                                for nf in sub.get("nfs_mp", []):
+                                    sub_nfs.add(nf)
+                            rastreio["opl"] = ", ".join(sorted(sub_opls)) if sub_opls else ""
+                            rastreio["nfs_mp"] = sorted(sub_nfs)
+
+                        itens_rastreio.append(rastreio)
 
                     df_rast_exibir = pd.DataFrame([
                         {
@@ -287,6 +317,7 @@ with tab_rastreio:
                             "Origem": i["origem"],
                             "OPL": i["opl"],
                             "NFs MP": ", ".join(i["nfs_mp"]) if isinstance(i["nfs_mp"], list) else i["nfs_mp"],
+                            "Lotes Mistura": i.get("lotes_mistura", ""),
                             "Grade": i["grade"],
                             "Cor": i["cor"],
                         }

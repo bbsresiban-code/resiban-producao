@@ -13,7 +13,7 @@ SCOPES = [
 WORKSHEETS = [
     "op_lavacao", "op_lavacao_nfs", "producao_lavacao", "paradas_lavacao",
     "op_extrusao", "producao_extrusao", "manutencao_extrusao",
-    "qualidade", "romaneio", "romaneio_itens",
+    "qualidade", "romaneio", "romaneio_itens", "mistura",
 ]
 
 
@@ -153,6 +153,10 @@ def init_spreadsheet():
         "qualidade": ["id", "codigo_lote", "mfi", "teor_cinzas", "densidade",
                       "umidade", "teste_filme", "grade", "cor", "local_estoque",
                       "analista", "data_analise", "observacao", "created_at"],
+        "mistura": ["id", "numero_mistura", "data", "codigo_lote_mistura",
+                    "extrusora", "peso_total_kg", "qtd_lotes",
+                    "lotes_entrada", "registrado_por", "status",
+                    "created_at"],
         "romaneio": ["id", "data", "numero_pedido", "cliente", "transportadora",
                      "placa_veiculo", "motorista", "responsavel_carregamento",
                      "nf_saida", "codigo_produto_nf", "peso_total_kg",

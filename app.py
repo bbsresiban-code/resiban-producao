@@ -27,10 +27,11 @@ PAGINAS_POR_PERFIL = {
         "Producao Lavacao",
         "OP Extrusao",
         "Producao Extrusao",
+        "Mistura",
         "Laboratorio",
         "Estoque",
         "Romaneio",
-        "Laudos Tecnicos",
+        "Laudos",
         "Exportar",
     ],
     "turno": [
@@ -41,14 +42,14 @@ PAGINAS_POR_PERFIL = {
         "Laboratorio",
         "Estoque",
         "Romaneio",
-        "Laudos Tecnicos",
+        "Laudos",
         "Exportar",
     ],
     "qualidade": [
         "Laboratorio",
         "Estoque",
         "Romaneio",
-        "Laudos Tecnicos",
+        "Laudos",
         "Exportar",
     ],
 }
@@ -61,8 +62,9 @@ PAGINAS_MAP = {
     "Producao Extrusao": "views/5_producao_extrusao.py",
     "Laboratorio": "views/6_qualidade.py",
     "Estoque": "views/7_estoque.py",
+    "Mistura": "views/11_mistura.py",
     "Romaneio": "views/8_romaneio.py",
-    "Laudos Tecnicos": "views/10_laudos.py",
+    "Laudos": "views/10_laudos.py",
     "Exportar": "views/9_exportar.py",
 }
 

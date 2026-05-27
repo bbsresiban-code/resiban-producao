@@ -26,6 +26,7 @@ TIPOS_PRODUTO = {
     "01": "Produto Proprio",
     "02": "Servico/Terceiros",
     "04": "Revenda",
+    "06": "Mistura",
 }
 
 EXTRUSORAS = ["A", "B"]
