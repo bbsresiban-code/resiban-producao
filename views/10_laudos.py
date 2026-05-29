@@ -426,6 +426,11 @@ with tab_historico:
                         ]
 
                         if not itens_hist.empty:
+                            try:
+                                df_ext_hist = read_sheet("producao_extrusao")
+                            except Exception:
+                                df_ext_hist = pd.DataFrame()
+
                             itens_qual_hist = []
                             for _, item in itens_hist.iterrows():
                                 codigo_lote = item.get("codigo_lote", "")
@@ -440,6 +445,7 @@ with tab_historico:
                                     "densidade": "",
                                     "umidade": "",
                                     "teste_filme": "",
+                                    "perc_reciclado": "",
                                     "peso_kg": peso_kg,
                                 }
 
@@ -467,6 +473,11 @@ with tab_historico:
                                         qual_item["teste_filme"] = ultimo.get(
                                             "teste_filme", ""
                                         )
+
+                                if not df_ext_hist.empty and "codigo_lote" in df_ext_hist.columns:
+                                    ext_m = df_ext_hist[df_ext_hist["codigo_lote"] == codigo_lote]
+                                    if not ext_m.empty:
+                                        qual_item["perc_reciclado"] = str(ext_m.iloc[0].get("perc_reciclado", ""))
 
                                 itens_qual_hist.append(qual_item)
 
