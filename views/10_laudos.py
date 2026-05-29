@@ -81,7 +81,11 @@ with tab_gerar:
                 if itens_rom.empty:
                     st.warning("Nenhum item encontrado para este romaneio.")
                 else:
-                    # Cruzar com qualidade
+                    try:
+                        df_ext_lt = read_sheet("producao_extrusao")
+                    except Exception:
+                        df_ext_lt = pd.DataFrame()
+
                     itens_qualidade = []
                     for _, item in itens_rom.iterrows():
                         codigo_lote = item.get("codigo_lote", "")
@@ -96,6 +100,7 @@ with tab_gerar:
                             "densidade": "",
                             "umidade": "",
                             "teste_filme": "",
+                            "perc_reciclado": "",
                             "peso_kg": peso_kg,
                         }
 
@@ -111,6 +116,11 @@ with tab_gerar:
                                 qual_data["umidade"] = ultimo.get("umidade", "")
                                 qual_data["teste_filme"] = ultimo.get("teste_filme", "")
 
+                        if not df_ext_lt.empty and "codigo_lote" in df_ext_lt.columns:
+                            ext_m = df_ext_lt[df_ext_lt["codigo_lote"] == codigo_lote]
+                            if not ext_m.empty:
+                                qual_data["perc_reciclado"] = str(ext_m.iloc[0].get("perc_reciclado", ""))
+
                         itens_qualidade.append(qual_data)
 
                     # Montar tabela para exibicao
@@ -125,6 +135,7 @@ with tab_gerar:
                             "densidade",
                             "umidade",
                             "teste_filme",
+                            "perc_reciclado",
                         ]
                     ].copy()
                     df_exibir_tabela.columns = [
@@ -136,6 +147,7 @@ with tab_gerar:
                         "Densidade",
                         "Umidade",
                         "Filme",
+                        "% Reciclado",
                     ]
 
                     st.markdown("#### Dados de Qualidade dos Lotes")
@@ -240,6 +252,7 @@ with tab_rastreio:
                         grade = ""
                         cor = ""
                         lotes_mistura = ""
+                        perc_reciclado = ""
 
                         if not df_ext_rast.empty and "codigo_lote" in df_ext_rast.columns:
                             lote_row = df_ext_rast[df_ext_rast["codigo_lote"].astype(str) == codigo_lote]
@@ -248,6 +261,7 @@ with tab_rastreio:
                                 tipo_lote = str(lote_data.get("tipo", ""))
                                 ope = str(lote_data.get("numero_op", ""))
                                 opl = str(lote_data.get("opl_origem", ""))
+                                perc_reciclado = str(lote_data.get("perc_reciclado", ""))
 
                                 if tipo_lote == "06" and not df_mistura_rast.empty:
                                     mix = df_mistura_rast[df_mistura_rast["codigo_lote_mistura"].astype(str) == codigo_lote]
@@ -285,6 +299,7 @@ with tab_rastreio:
                             "lotes_mistura": lotes_mistura,
                             "grade": grade,
                             "cor": cor,
+                            "perc_reciclado": perc_reciclado,
                         }
 
                     itens_rastreio = []
@@ -313,6 +328,7 @@ with tab_rastreio:
                         {
                             "Lote": i["codigo_lote"],
                             "Peso (kg)": i["peso_kg"],
+                            "% Reciclado": i.get("perc_reciclado", ""),
                             "OPE": i["ope"],
                             "Origem": i["origem"],
                             "OPL": i["opl"],

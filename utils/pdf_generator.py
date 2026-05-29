@@ -608,12 +608,11 @@ def gerar_pdf_laudo_tecnico(romaneio: dict, itens_qualidade: list[dict]) -> byte
     pdf.cell(0, 7, f"Data: {data_doc}", align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(6)
 
-    # Tabela de qualidade por lote
     headers = [
-        "Lote", "Grade", "Cor", "MFI", "Teor Cinzas",
-        "Densidade", "Umidade", "Teste Filme",
+        "Lote", "Grade", "Cor", "MFI", "Cinzas",
+        "Densidade", "Umidade", "Filme", "% Recic.",
     ]
-    col_widths = [22, 22, 20, 20, 25, 22, 22, 27]
+    col_widths = [22, 22, 18, 18, 20, 20, 20, 20, 20]
 
     rows = [
         [
@@ -625,6 +624,7 @@ def gerar_pdf_laudo_tecnico(romaneio: dict, itens_qualidade: list[dict]) -> byte
             str(item.get("densidade", "")),
             str(item.get("umidade", "")),
             str(item.get("teste_filme", "")),
+            str(item.get("perc_reciclado", "")),
         ]
         for item in (itens_qualidade or [])
     ]
@@ -680,8 +680,8 @@ def gerar_pdf_laudo_rastreabilidade(romaneio: dict, itens_rastreio: list[dict]) 
              align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
-    headers = ["Lote", "Peso (kg)", "OPE", "Origem", "OPL", "NFs de MP", "Grade", "Cor"]
-    col_w = [24, 18, 18, 18, 18, 38, 22, 18]
+    headers = ["Lote", "Peso (kg)", "% Recic.", "OPE", "Origem", "OPL", "NFs de MP", "Grade", "Cor"]
+    col_w = [22, 16, 18, 16, 16, 16, 30, 18, 16]
     rows = []
     for item in (itens_rastreio or []):
         nfs = item.get("nfs_mp", "")
@@ -690,6 +690,7 @@ def gerar_pdf_laudo_rastreabilidade(romaneio: dict, itens_rastreio: list[dict]) 
         rows.append([
             str(item.get("codigo_lote", "")),
             str(item.get("peso_kg", "")),
+            str(item.get("perc_reciclado", "")),
             str(item.get("ope", "")),
             str(item.get("origem", "")),
             str(item.get("opl", "")),

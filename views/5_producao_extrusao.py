@@ -104,9 +104,19 @@ with tab_lote:
                 "Peso (kg)", min_value=0.0, step=0.5, format="%.1f", key="lote_peso"
             )
             hora = st.time_input("Hora", value=time(8, 0), key="lote_hora")
+            aditivo_gramas = st.number_input(
+                "Aditivo (gramas)", min_value=0.0, step=10.0, value=0.0, format="%.1f",
+                key="lote_aditivo_g",
+                help="Quantidade de aditivo neste lote",
+            )
         with col_f2:
             observacao_lote = st.text_input("Observacao", key="lote_obs")
             registrado_por = st.text_input("Registrado por", key="lote_reg")
+            if peso_kg > 0:
+                perc_reciclado_lote = ((peso_kg * 1000 - aditivo_gramas) / (peso_kg * 1000)) * 100
+                st.metric("Conteudo Reciclado", f"{perc_reciclado_lote:.2f}%")
+            else:
+                perc_reciclado_lote = 0.0
 
         # --- Troca de telas (condicional por extrusora) ---
         qtd_troca_telas = 0
@@ -175,6 +185,8 @@ with tab_lote:
                         "tipo_descricao": TIPOS_PRODUTO[tipo],
                         "extrusora": extrusora,
                         "peso_kg": peso_kg,
+                        "aditivo_gramas": float(aditivo_gramas),
+                        "perc_reciclado": round(perc_reciclado_lote, 2),
                         "troca_telas": f"Sim (1E:{qtd_1o_estagio} 2E:{qtd_2o_estagio})" if extrusora == "A" else (f"Sim ({qtd_troca_telas})" if troca_telas == "Sim" else "Nao"),
                         "mes": data_lote.month,
                         "ano": data_lote.year % 100,

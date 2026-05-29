@@ -38,6 +38,20 @@ with tab_nova:
         origem = st.selectbox("Origem do Material", ["Proprio", "Servico"], key="ope_origem")
         produto = st.text_input("Produto", key="ope_prod")
         maquina = st.selectbox("Maquina", options=EXTRUSORAS, format_func=lambda x: f"Extrusora {x}", key="ope_maq")
+        aditivo_percentual = st.number_input(
+            "Aditivo (%)", min_value=0.0, max_value=100.0, step=0.1, value=0.0, format="%.1f",
+            key="ope_aditivo_pct",
+            help="Percentual de aditivo no material",
+        )
+
+    aditivo_kg_total = volume_ton * 1000 * (aditivo_percentual / 100)
+    perc_reciclado_op = 100 - aditivo_percentual
+    if aditivo_percentual > 0:
+        st.info(
+            f"Aditivo total: **{aditivo_kg_total:,.1f} kg** "
+            f"({aditivo_percentual:.1f}% de {volume_ton} ton)  \n"
+            f"Conteudo reciclado: **{perc_reciclado_op:.1f}%**"
+        )
 
     opl_vinculada = ""
     if origem == "Proprio":
@@ -83,6 +97,8 @@ with tab_nova:
                     "opl_origem": opl_vinculada if origem == "Proprio" else "",
                     "produto": produto.strip(),
                     "maquina": maquina,
+                    "aditivo_percentual": float(aditivo_percentual),
+                    "aditivo_kg_total": float(aditivo_kg_total),
                     "data_inicio": "",
                     "data_final": "",
                     "coordenador": "",
