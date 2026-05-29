@@ -19,7 +19,7 @@ from utils.formatters import (
 # ---------------------------------------------------------------------------
 st.header("Laboratorio de Qualidade")
 
-tab_analisar, tab_historico = st.tabs(["Analisar Lote", "Historico"])
+tab_analisar, tab_editar, tab_historico = st.tabs(["Analisar Lote", "Editar Analise", "Historico"])
 
 # ===========================================================================
 # TAB: Analisar Lote
@@ -185,6 +185,105 @@ with tab_analisar:
                             )
                         except Exception as exc:
                             st.error(f"Erro ao registrar analise: {exc}")
+
+
+# ===========================================================================
+# TAB: Editar Analise
+# ===========================================================================
+with tab_editar:
+    st.subheader("Editar Analise de Lote")
+    st.caption("Altere os resultados de uma analise ja registrada.")
+
+    try:
+        df_qual_edit = read_sheet_no_cache("qualidade")
+    except Exception as exc:
+        st.error(f"Erro ao carregar analises: {exc}")
+        df_qual_edit = pd.DataFrame()
+
+    if df_qual_edit.empty:
+        st.info("Nenhuma analise registrada ainda.")
+    else:
+        opcoes_lotes = df_qual_edit["codigo_lote"].astype(str).unique().tolist()
+        lote_edit = st.selectbox(
+            "Selecione o lote para editar", options=sorted(opcoes_lotes), key="edit_lote_sel"
+        )
+
+        if lote_edit:
+            analises_lote = df_qual_edit[df_qual_edit["codigo_lote"].astype(str) == lote_edit]
+            analise_atual = analises_lote.iloc[-1]
+            analise_id = str(analise_atual["id"])
+
+            st.markdown(f"**Lote:** `{lote_edit}` | **Analista atual:** {analise_atual.get('analista', '')} | **Data:** {formatar_data(analise_atual.get('data_analise', ''))}")
+            st.divider()
+
+            def _gp_mfi(s):
+                try:
+                    v = float(str(s).replace(",", "."))
+                except (ValueError, TypeError):
+                    return ""
+                if v <= 0.29:
+                    return "RESI03CR"
+                elif v <= 0.79:
+                    return "RESI02CI"
+                elif v <= 1.2:
+                    return "RESI01C"
+                elif v <= 1.99:
+                    return "RESI04CS"
+                elif v <= 6.0:
+                    return "RESI06S"
+                return ""
+
+            mfi_edit = st.text_input(
+                "MFI (g/10min)", value=str(analise_atual.get("mfi", "")),
+                key="edit_mfi", help="Use virgula ou ponto",
+            )
+            grade_sug = _gp_mfi(mfi_edit)
+            if grade_sug:
+                st.success(f"Grade sugerido pelo MFI: **{grade_sug}**")
+
+            col_e1, col_e2 = st.columns(2)
+            with col_e1:
+                grade_atual = str(analise_atual.get("grade", ""))
+                idx_g = GRADES.index(grade_atual) if grade_atual in GRADES else (GRADES.index(grade_sug) if grade_sug in GRADES else 0)
+                grade_edit = st.selectbox("Grade", options=GRADES, index=idx_g, key="edit_grade")
+
+                cor_atual = str(analise_atual.get("cor", ""))
+                idx_c = CORES.index(cor_atual) if cor_atual in CORES else 0
+                cor_edit = st.selectbox("Cor", options=CORES, index=idx_c, key="edit_cor")
+
+                umidade_edit = st.text_input("Umidade (%)", value=str(analise_atual.get("umidade", "")), key="edit_umidade")
+                tf_atual = str(analise_atual.get("teste_filme", "OK"))
+                tf_edit = st.selectbox("Teste de Filme", ["OK", "Anomalia"], index=0 if tf_atual == "OK" else 1, key="edit_tf")
+            with col_e2:
+                cinzas_edit = st.text_input("Teor de Cinzas (%) - opcional", value=str(analise_atual.get("teor_cinzas", "")), key="edit_cinzas")
+                dens_edit = st.text_input("Densidade (g/cm3) - opcional", value=str(analise_atual.get("densidade", "")), key="edit_dens")
+                analista_edit = st.text_input("Analista", value=str(analise_atual.get("analista", "")), key="edit_analista")
+                obs_edit = st.text_input("Observacao", value=str(analise_atual.get("observacao", "")), key="edit_obs")
+
+            if st.button("Salvar Alteracoes", type="primary", use_container_width=True, key="btn_edit_salvar"):
+                def _pn(t):
+                    t = str(t or "").strip()
+                    return t.replace(",", ".") if t else ""
+
+                try:
+                    novos_valores = {
+                        "mfi": _pn(mfi_edit),
+                        "teor_cinzas": _pn(cinzas_edit),
+                        "densidade": _pn(dens_edit),
+                        "umidade": _pn(umidade_edit),
+                        "teste_filme": tf_edit,
+                        "grade": grade_edit,
+                        "cor": cor_edit,
+                        "analista": analista_edit.strip(),
+                        "observacao": obs_edit.strip(),
+                    }
+                    for coluna, valor in novos_valores.items():
+                        update_rows("qualidade", "id", [analise_id], coluna, valor)
+
+                    st.success(f"Analise do lote **{lote_edit}** atualizada. Novo grade: **{grade_edit} - {cor_edit}**")
+                    st.toast("Analise atualizada!")
+                except Exception as exc:
+                    st.error(f"Erro ao salvar: {exc}")
 
 
 # ===========================================================================
