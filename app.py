@@ -36,6 +36,7 @@ PAGINAS_POR_PERFIL = {
         "Romaneio",
         "Laudos",
         "Exportar",
+        "Inventario",
     ],
     "turno": [
         "Producao Lavacao",
@@ -49,6 +50,7 @@ PAGINAS_POR_PERFIL = {
         "Romaneio",
         "Laudos",
         "Exportar",
+        "Inventario",
     ],
     "qualidade": [
         "Classificacao MP",
@@ -76,6 +78,7 @@ PAGINAS_MAP = {
     "Romaneio": "views/8_romaneio.py",
     "Laudos": "views/10_laudos.py",
     "Exportar": "views/9_exportar.py",
+    "Inventario": "views/15_inventario.py",
 }
 
 if "logado" not in st.session_state:
