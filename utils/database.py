@@ -1,14 +1,8 @@
 import streamlit as st
-import gspread
-from google.oauth2.service_account import Credentials
 import pandas as pd
 import uuid
 from datetime import datetime
-
-SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive",
-]
+from supabase import create_client, Client
 
 WORKSHEETS = [
     "aparas_estoque",
@@ -19,119 +13,99 @@ WORKSHEETS = [
 
 
 @st.cache_resource
-def get_client():
-    creds_info = st.secrets["gcp_service_account"]
-    creds = Credentials.from_service_account_info(dict(creds_info), scopes=SCOPES)
-    return gspread.authorize(creds)
+def get_client() -> Client:
+    url = st.secrets["supabase"]["url"]
+    key = st.secrets["supabase"]["key"]
+    return create_client(url, key)
 
 
-@st.cache_resource
-def get_spreadsheet():
+def _get_version(table: str) -> int:
+    if "_table_versions" not in st.session_state:
+        st.session_state._table_versions = {}
+    return st.session_state._table_versions.get(table, 0)
+
+
+def _bump_version(table: str):
+    if "_table_versions" not in st.session_state:
+        st.session_state._table_versions = {}
+    st.session_state._table_versions[table] = _get_version(table) + 1
+
+
+@st.cache_data(ttl=120)
+def _read_table_cached(table: str, _version: int) -> pd.DataFrame:
     client = get_client()
-    return client.open(st.secrets["spreadsheet_name"])
-
-
-def _get_version(ws_name: str) -> int:
-    if "_sheet_versions" not in st.session_state:
-        st.session_state._sheet_versions = {}
-    return st.session_state._sheet_versions.get(ws_name, 0)
-
-
-def _bump_version(ws_name: str):
-    if "_sheet_versions" not in st.session_state:
-        st.session_state._sheet_versions = {}
-    st.session_state._sheet_versions[ws_name] = _get_version(ws_name) + 1
-
-
-@st.cache_data(ttl=300)
-def _read_sheet_cached(ws_name: str, _version: int) -> pd.DataFrame:
-    sp = get_spreadsheet()
-    ws = sp.worksheet(ws_name)
-    data = ws.get_all_records()
+    response = client.table(table).select("*").execute()
+    data = response.data or []
     if not data:
         return pd.DataFrame()
     return pd.DataFrame(data)
 
 
-def read_sheet(worksheet_name: str, ttl: int = 300) -> pd.DataFrame:
+def read_sheet(worksheet_name: str, ttl: int = 120) -> pd.DataFrame:
     version = _get_version(worksheet_name)
-    return _read_sheet_cached(worksheet_name, version)
+    return _read_table_cached(worksheet_name, version)
 
 
 def read_sheet_no_cache(worksheet_name: str) -> pd.DataFrame:
     return read_sheet(worksheet_name)
 
 
+def _serialize_value(v):
+    if v is None:
+        return None
+    if isinstance(v, (int, float, str, bool)):
+        return v
+    if hasattr(v, "isoformat"):
+        return v.isoformat()
+    return str(v)
+
+
+def _serialize_row(data: dict) -> dict:
+    return {k: _serialize_value(v) for k, v in data.items()}
+
+
 def append_row(worksheet_name: str, data: dict) -> dict:
     data["id"] = str(uuid.uuid4())
-    data["created_at"] = datetime.now().isoformat()
-    sp = get_spreadsheet()
-    ws = sp.worksheet(worksheet_name)
-    headers = ws.row_values(1)
-    row = [data.get(h, "") for h in headers]
-    ws.append_row(row, value_input_option="USER_ENTERED")
+    data.setdefault("created_at", datetime.now().isoformat())
+    payload = _serialize_row(data)
+    client = get_client()
+    client.table(worksheet_name).insert(payload).execute()
     _bump_version(worksheet_name)
     return data
 
 
 def append_rows(worksheet_name: str, rows: list[dict]) -> list[dict]:
-    sp = get_spreadsheet()
-    ws = sp.worksheet(worksheet_name)
-    headers = ws.row_values(1)
     now = datetime.now().isoformat()
-    formatted_rows = []
+    payloads = []
     for data in rows:
         data["id"] = str(uuid.uuid4())
-        data["created_at"] = now
-        formatted_rows.append([data.get(h, "") for h in headers])
-    ws.append_rows(formatted_rows, value_input_option="USER_ENTERED")
+        data.setdefault("created_at", now)
+        payloads.append(_serialize_row(data))
+    client = get_client()
+    client.table(worksheet_name).insert(payloads).execute()
     _bump_version(worksheet_name)
     return rows
 
 
 def update_rows(worksheet_name: str, match_col: str, match_values: list,
                 update_col: str, new_value):
-    sp = get_spreadsheet()
-    ws = sp.worksheet(worksheet_name)
-    headers = ws.row_values(1)
-    match_idx = headers.index(match_col) + 1
-    update_idx = headers.index(update_col) + 1
-    all_values = ws.col_values(match_idx)
-    cells_to_update = []
-    for i, val in enumerate(all_values):
-        if val in [str(v) for v in match_values]:
-            cells_to_update.append(gspread.Cell(i + 1, update_idx, new_value))
-    if cells_to_update:
-        ws.update_cells(cells_to_update)
+    client = get_client()
+    str_values = [str(v) for v in match_values]
+    client.table(worksheet_name).update({update_col: _serialize_value(new_value)}).in_(match_col, str_values).execute()
     _bump_version(worksheet_name)
 
 
 def update_row_multi(worksheet_name: str, match_col: str, match_value,
                      updates: dict):
-    """Atualiza varias colunas de uma vez para uma linha. Reduz chamadas API."""
-    sp = get_spreadsheet()
-    ws = sp.worksheet(worksheet_name)
-    headers = ws.row_values(1)
-    match_idx = headers.index(match_col) + 1
-    all_values = ws.col_values(match_idx)
-    cells_to_update = []
-    target_str = str(match_value)
-    for i, val in enumerate(all_values):
-        if val == target_str:
-            row_num = i + 1
-            for col_name, new_value in updates.items():
-                if col_name in headers:
-                    col_idx = headers.index(col_name) + 1
-                    cells_to_update.append(gspread.Cell(row_num, col_idx, new_value))
-            break
-    if cells_to_update:
-        ws.update_cells(cells_to_update)
+    client = get_client()
+    payload = _serialize_row(updates)
+    client.table(worksheet_name).update(payload).eq(match_col, str(match_value)).execute()
     _bump_version(worksheet_name)
 
 
 def proximo_sequencial(worksheet_name: str, coluna: str, prefixo: str) -> str:
     try:
-        df = read_sheet(worksheet_name, ttl=60)
+        df = read_sheet(worksheet_name, ttl=30)
     except Exception:
         df = pd.DataFrame()
     if df.empty or coluna not in df.columns:
@@ -155,62 +129,5 @@ def proximo_sequencial(worksheet_name: str, coluna: str, prefixo: str) -> str:
 
 
 def init_spreadsheet():
-    sp = get_spreadsheet()
-    existing = [ws.title for ws in sp.worksheets()]
-    headers_map = {
-        "aparas_estoque": ["id", "numero_nf", "fornecedor", "tipo_fardo",
-                           "quantidade", "peso_kg", "data_recebimento",
-                           "qualidade", "status", "opl_em_uso",
-                           "data_classificacao", "classificado_por",
-                           "registrado_por", "observacao", "created_at"],
-        "op_lavacao": ["id", "numero_op", "data", "responsavel", "cliente",
-                       "volume_ton", "produto", "indice_fluidez", "status",
-                       "observacao", "created_at"],
-        "op_lavacao_nfs": ["id", "op_lavacao_id", "nf_apara", "fornecedor",
-                           "tipo_fardo", "quant_fardos", "peso_kg", "obs",
-                           "created_at"],
-        "producao_lavacao": ["id", "data", "turno", "numero_op", "tipo_fardo",
-                             "nf", "quantidade", "peso_kg", "perda_lixo_kg",
-                             "perda_papelao_kg", "perda_plastico_colorido_kg",
-                             "perda_total_kg", "registrado_por", "created_at"],
-        "paradas_lavacao": ["id", "data", "turno", "tipo_parada", "hora_inicio",
-                            "hora_fim", "duracao_min", "observacao", "created_at"],
-        "op_extrusao": ["id", "numero_op", "data", "responsavel", "cliente",
-                        "volume_ton", "origem", "tipo_lote", "opl_origem",
-                        "produto", "maquina", "aditivo_percentual",
-                        "aditivo_kg_total", "data_inicio", "data_final",
-                        "coordenador", "producao_final_kg", "perda_percentual",
-                        "status", "observacao", "created_at"],
-        "producao_extrusao": ["id", "data", "turno", "hora", "numero_op",
-                              "opl_origem", "codigo_lote", "tipo",
-                              "tipo_descricao", "extrusora", "peso_kg",
-                              "aditivo_gramas", "perc_reciclado",
-                              "troca_telas", "mes", "ano", "sequencial",
-                              "status", "observacao_lote",
-                              "registrado_por", "created_at"],
-        "manutencao_extrusao": ["id", "data", "turno", "troca_telas",
-                                "limpeza_gaveta", "troca_facas", "observacao",
-                                "created_at"],
-        "qualidade": ["id", "codigo_lote", "mfi", "teor_cinzas", "densidade",
-                      "umidade", "teste_filme", "grade", "cor", "local_estoque",
-                      "analista", "data_analise", "observacao", "created_at"],
-        "mistura": ["id", "numero_mistura", "data", "codigo_lote_mistura",
-                    "extrusora", "peso_total_kg", "qtd_lotes",
-                    "lotes_entrada", "registrado_por", "status",
-                    "created_at"],
-        "romaneio": ["id", "data", "numero_pedido", "cliente", "transportadora",
-                     "placa_veiculo", "motorista", "responsavel_carregamento",
-                     "nf_saida", "codigo_produto_nf", "peso_total_kg",
-                     "qtd_lotes", "serial", "registrado_por", "created_at"],
-        "romaneio_itens": ["id", "romaneio_id", "codigo_lote", "produto",
-                           "peso_kg", "created_at"],
-    }
-    for ws_name, headers in headers_map.items():
-        if ws_name not in existing:
-            ws = sp.add_worksheet(title=ws_name, rows=1000, cols=len(headers))
-            ws.update(values=[headers], range_name="A1")
-        else:
-            ws = sp.worksheet(ws_name)
-            current = ws.row_values(1)
-            if not current:
-                ws.update(values=[headers], range_name="A1")
+    """Compatibilidade: tabelas sao criadas via SQL no Supabase."""
+    pass
