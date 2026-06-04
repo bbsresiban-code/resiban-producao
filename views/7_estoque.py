@@ -38,11 +38,13 @@ if df_ext.empty:
     st.info("Nenhum dado de producao encontrado.")
     st.stop()
 
-# Filtrar somente disponiveis
+# Filtrar somente disponiveis e EXCLUIR tipo 02 (servico - va em Controle Servico)
 df_disp = df_ext[df_ext["status"] == "disponivel"].copy()
+if "tipo" in df_disp.columns:
+    df_disp = df_disp[df_disp["tipo"].astype(str) != "02"]
 
 if df_disp.empty:
-    st.info("Nenhum lote disponivel em estoque.")
+    st.info("Nenhum lote disponivel em estoque (proprio).")
     st.stop()
 
 # Converter peso

@@ -76,7 +76,7 @@ if not df_grao_serv.empty:
 # ===========================================================================
 # Tabs
 # ===========================================================================
-tab_aparas, tab_grao, tab_ope = st.tabs(["Aparas de Servico", "Grao de Servico", "OPEs de Servico"])
+tab_aparas, tab_grao, tab_ope, tab_fechamento = st.tabs(["Aparas de Servico", "Grao de Servico", "OPEs de Servico", "Fechamento p/ Cliente"])
 
 with tab_aparas:
     st.subheader("Aparas de Servico (Terceiros)")
@@ -118,3 +118,105 @@ with tab_ope:
         cols = [c for c in ["numero_op", "data", "cliente", "responsavel",
                             "volume_ton", "produto", "maquina", "status"] if c in df_ope_serv.columns]
         st.dataframe(df_ope_serv[cols], use_container_width=True, hide_index=True)
+
+with tab_fechamento:
+    st.subheader("Fechamento de OPE de Servico (Relatorio ao Cliente)")
+    st.caption("Mostra peso entrada (aparas) vs peso saida (graos produzidos) com perdas do processo.")
+
+    if df_ope_serv.empty:
+        st.info("Nenhuma OPE de servico para fechar.")
+    else:
+        ope_opcoes = df_ope_serv["numero_op"].astype(str).tolist()
+        ope_sel = st.selectbox("Selecione a OPE de Servico", options=ope_opcoes, key="serv_fech_ope")
+
+        if ope_sel:
+            ope_row = df_ope_serv[df_ope_serv["numero_op"].astype(str) == ope_sel].iloc[0]
+            cliente_ope = str(ope_row.get("cliente", ""))
+            data_ope = str(ope_row.get("data", ""))
+            produto_ope = str(ope_row.get("produto", ""))
+
+            st.markdown(f"**Cliente:** {cliente_ope} | **Data:** {formatar_data(data_ope)} | **Produto:** {produto_ope}")
+
+            # Entrada: aparas usadas (opl_em_uso = numero_op)
+            aparas_da_ope = pd.DataFrame()
+            if not df_aparas_serv.empty:
+                aparas_da_ope = df_aparas_serv[df_aparas_serv["opl_em_uso"].astype(str) == ope_sel].copy()
+
+            peso_entrada = 0.0
+            qtd_aparas = 0
+            if not aparas_da_ope.empty:
+                aparas_da_ope["peso_kg"] = pd.to_numeric(aparas_da_ope["peso_kg"], errors="coerce").fillna(0)
+                peso_entrada = float(aparas_da_ope["peso_kg"].sum())
+                qtd_aparas = len(aparas_da_ope)
+
+            # Saida: lotes produzidos com numero_op = ope_sel
+            lotes_da_ope = pd.DataFrame()
+            if not df_grao_serv.empty:
+                lotes_da_ope = df_grao_serv[df_grao_serv["numero_op"].astype(str) == ope_sel].copy()
+
+            peso_saida = 0.0
+            qtd_lotes = 0
+            if not lotes_da_ope.empty:
+                lotes_da_ope["peso_kg"] = pd.to_numeric(lotes_da_ope["peso_kg"], errors="coerce").fillna(0)
+                peso_saida = float(lotes_da_ope["peso_kg"].sum())
+                qtd_lotes = len(lotes_da_ope)
+
+            perda_kg = max(0, peso_entrada - peso_saida)
+            perda_perc = (perda_kg / peso_entrada * 100) if peso_entrada > 0 else 0
+
+            st.divider()
+            col_f1, col_f2, col_f3 = st.columns(3)
+            col_f1.metric("Peso Entrada (Aparas)", formatar_peso(peso_entrada), f"{qtd_aparas} NF(s)")
+            col_f2.metric("Peso Saida (Grao)", formatar_peso(peso_saida), f"{qtd_lotes} lote(s)")
+            col_f3.metric("Perda do Processo", formatar_peso(perda_kg), f"{perda_perc:.2f}%")
+
+            st.divider()
+            st.markdown("#### Aparas Entradas")
+            if aparas_da_ope.empty:
+                st.caption("Nenhuma apara vinculada.")
+            else:
+                cols_ap = [c for c in ["numero_nf", "fornecedor", "qualidade", "tipo_fardo",
+                                       "quantidade", "peso_kg"] if c in aparas_da_ope.columns]
+                st.dataframe(aparas_da_ope[cols_ap], use_container_width=True, hide_index=True)
+
+            st.markdown("#### Lotes Produzidos")
+            if lotes_da_ope.empty:
+                st.caption("Nenhum lote produzido ainda.")
+            else:
+                cols_lt = [c for c in ["codigo_lote", "data", "extrusora",
+                                       "peso_kg", "status"] if c in lotes_da_ope.columns]
+                st.dataframe(lotes_da_ope[cols_lt], use_container_width=True, hide_index=True)
+
+            # Gerar relatorio Excel
+            st.divider()
+            from io import BytesIO
+            def gerar_excel_servico():
+                buf = BytesIO()
+                with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+                    resumo = pd.DataFrame({
+                        "Item": ["Cliente", "OPE", "Data", "Produto",
+                                 "Peso Entrada (kg)", "Peso Saida (kg)",
+                                 "Perda (kg)", "Perda (%)"],
+                        "Valor": [cliente_ope, ope_sel, data_ope, produto_ope,
+                                  f"{peso_entrada:.2f}", f"{peso_saida:.2f}",
+                                  f"{perda_kg:.2f}", f"{perda_perc:.2f}%"],
+                    })
+                    resumo.to_excel(writer, sheet_name="Resumo", index=False)
+                    if not aparas_da_ope.empty:
+                        aparas_da_ope[cols_ap].to_excel(writer, sheet_name="Aparas Entrada", index=False)
+                    if not lotes_da_ope.empty:
+                        lotes_da_ope[cols_lt].to_excel(writer, sheet_name="Lotes Saida", index=False)
+                return buf.getvalue()
+
+            try:
+                excel_bytes = gerar_excel_servico()
+                st.download_button(
+                    "Baixar Relatorio de Fechamento (Excel)",
+                    excel_bytes,
+                    file_name=f"fechamento_servico_{ope_sel}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="primary",
+                    use_container_width=True,
+                )
+            except Exception as exc:
+                st.error(f"Erro ao gerar relatorio: {exc}")
