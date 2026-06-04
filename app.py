@@ -23,6 +23,9 @@ USUARIOS = {
 PAGINAS_POR_PERFIL = {
     "master": [
         "Dashboard",
+        "Recebimento MP",
+        "Classificacao MP",
+        "Estoque Aparas",
         "OP Lavacao",
         "Producao Lavacao",
         "OP Extrusao",
@@ -39,6 +42,8 @@ PAGINAS_POR_PERFIL = {
         "Producao Extrusao",
     ],
     "logistica": [
+        "Recebimento MP",
+        "Estoque Aparas",
         "Laboratorio",
         "Estoque",
         "Romaneio",
@@ -46,6 +51,8 @@ PAGINAS_POR_PERFIL = {
         "Exportar",
     ],
     "qualidade": [
+        "Classificacao MP",
+        "Estoque Aparas",
         "Laboratorio",
         "Estoque",
         "Romaneio",
@@ -56,6 +63,9 @@ PAGINAS_POR_PERFIL = {
 
 PAGINAS_MAP = {
     "Dashboard": "views/1_dashboard.py",
+    "Recebimento MP": "views/12_recebimento_mp.py",
+    "Classificacao MP": "views/13_classificacao_mp.py",
+    "Estoque Aparas": "views/14_estoque_aparas.py",
     "OP Lavacao": "views/2_op_lavacao.py",
     "Producao Lavacao": "views/3_producao_lavacao.py",
     "OP Extrusao": "views/4_op_extrusao.py",

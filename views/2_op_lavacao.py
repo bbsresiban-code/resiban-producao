@@ -40,80 +40,96 @@ with tab_nova:
     observacao = st.text_area("Observacao", key="op_lav_obs")
 
     # -----------------------------------------------------------------------
-    # Secao: NFs da OP
+    # Secao: NFs da OP (selecao do estoque de aparas)
     # -----------------------------------------------------------------------
     st.divider()
-    st.subheader("Notas Fiscais de Apara")
-    st.caption("Adicione as NFs que serao consumidas nesta OP antes de criar.")
+    st.subheader("Selecionar NFs do Estoque de Aparas")
+    st.caption("Selecione as NFs ja classificadas pela qualidade que serao consumidas nesta OP.")
 
-    if "nfs_temp" not in st.session_state:
-        st.session_state.nfs_temp = []
+    try:
+        df_aparas_disp = read_sheet_no_cache("aparas_estoque")
+    except Exception:
+        df_aparas_disp = pd.DataFrame()
 
-    with st.form("form_add_nf", clear_on_submit=True):
-        col_nf1, col_nf2, col_nf3 = st.columns(3)
-        with col_nf1:
-            nf_apara = st.text_input("NF Apara")
-            fornecedor = st.text_input("Fornecedor")
-        with col_nf2:
-            tipo_fardo = st.selectbox("Tipo de Fardo", ["Fardinho", "Fardao"])
-            quant_fardos = st.number_input("Quantidade de Fardos", min_value=0, step=1)
-        with col_nf3:
-            peso_kg = st.number_input("Peso (kg)", min_value=0.0, step=0.5, format="%.1f")
-            obs_nf = st.text_input("Observacao da NF")
-
-        add_nf = st.form_submit_button("Adicionar NF a lista", use_container_width=True)
-
-    if add_nf:
-        erros_nf = []
-        if not nf_apara.strip():
-            erros_nf.append("NF Apara e obrigatoria.")
-        if quant_fardos <= 0:
-            erros_nf.append("Quantidade de fardos deve ser maior que zero.")
-        if peso_kg <= 0:
-            erros_nf.append("Peso deve ser maior que zero.")
-
-        if erros_nf:
-            for e in erros_nf:
-                st.error(e)
-        else:
-            st.session_state.nfs_temp.append({
-                "nf_apara": nf_apara.strip(),
-                "fornecedor": fornecedor.strip(),
-                "tipo_fardo": tipo_fardo,
-                "quant_fardos": quant_fardos,
-                "peso_kg": peso_kg,
-                "obs": obs_nf.strip(),
-            })
-            st.toast(f"NF {nf_apara} adicionada a lista!")
-            st.rerun()
-
-    if st.session_state.nfs_temp:
-        df_nfs_temp = pd.DataFrame(st.session_state.nfs_temp)
-        st.dataframe(
-            df_nfs_temp[["nf_apara", "fornecedor", "tipo_fardo", "quant_fardos", "peso_kg", "obs"]],
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "nf_apara": "NF Apara",
-                "fornecedor": "Fornecedor",
-                "tipo_fardo": "Tipo",
-                "quant_fardos": "Qtd Fardos",
-                "peso_kg": "Peso (kg)",
-                "obs": "Obs",
-            },
-        )
-        peso_total = sum(nf["peso_kg"] for nf in st.session_state.nfs_temp)
-        total_fardos = sum(nf["quant_fardos"] for nf in st.session_state.nfs_temp)
-        col_t1, col_t2, col_t3 = st.columns(3)
-        col_t1.metric("NFs adicionadas", len(st.session_state.nfs_temp))
-        col_t2.metric("Total Fardos", total_fardos)
-        col_t3.metric("Peso Total", formatar_peso(peso_total))
-
-        if st.button("Limpar lista de NFs"):
-            st.session_state.nfs_temp = []
-            st.rerun()
+    if df_aparas_disp.empty:
+        st.warning("Nenhuma NF no estoque de aparas. Cadastre em 'Recebimento MP' e classifique em 'Classificacao MP'.")
+        nfs_selecionadas_op = []
     else:
-        st.warning("Nenhuma NF adicionada ainda. Adicione pelo menos uma NF antes de criar a OP.")
+        df_disponiveis = df_aparas_disp[df_aparas_disp["status"].astype(str) == "disponivel"].copy()
+
+        if df_disponiveis.empty:
+            st.warning("Nenhuma NF classificada disponivel. Aguarde a qualidade classificar.")
+            nfs_selecionadas_op = []
+        else:
+            col_fil1, col_fil2 = st.columns(2)
+            with col_fil1:
+                filtro_qual = st.multiselect(
+                    "Filtrar por Qualidade", options=["A", "B", "C"], default=["A", "B", "C"], key="opl_filtro_qual",
+                )
+            with col_fil2:
+                filtro_tipo = st.multiselect(
+                    "Filtrar por Tipo de Fardo", options=["Fardinho", "Fardao"], default=["Fardinho", "Fardao"], key="opl_filtro_tipo",
+                )
+
+            if filtro_qual:
+                df_disponiveis = df_disponiveis[df_disponiveis["qualidade"].astype(str).isin(filtro_qual)]
+            if filtro_tipo:
+                df_disponiveis = df_disponiveis[df_disponiveis["tipo_fardo"].astype(str).isin(filtro_tipo)]
+
+            if df_disponiveis.empty:
+                st.info("Nenhuma NF disponivel com os filtros selecionados.")
+                nfs_selecionadas_op = []
+            else:
+                df_disponiveis["peso_kg"] = pd.to_numeric(df_disponiveis["peso_kg"], errors="coerce").fillna(0)
+                df_disponiveis["quantidade"] = pd.to_numeric(df_disponiveis["quantidade"], errors="coerce").fillna(0).astype(int)
+                df_disponiveis["selecionar"] = False
+                df_disponiveis_view = df_disponiveis[
+                    ["selecionar", "numero_nf", "fornecedor", "qualidade", "tipo_fardo", "quantidade", "peso_kg", "data_recebimento"]
+                ].copy()
+
+                edited = st.data_editor(
+                    df_disponiveis_view,
+                    use_container_width=True,
+                    hide_index=True,
+                    disabled=["numero_nf", "fornecedor", "qualidade", "tipo_fardo", "quantidade", "peso_kg", "data_recebimento"],
+                    column_config={
+                        "selecionar": st.column_config.CheckboxColumn("Selecionar"),
+                        "numero_nf": "NF",
+                        "fornecedor": "Fornecedor",
+                        "qualidade": "Qual.",
+                        "tipo_fardo": "Tipo",
+                        "quantidade": "Qtd",
+                        "peso_kg": "Peso (kg)",
+                        "data_recebimento": "Recebido",
+                    },
+                    key="opl_data_editor",
+                )
+
+                selecionadas = edited[edited["selecionar"] == True]
+                nfs_selecionadas_op = []
+
+                if not selecionadas.empty:
+                    for _, sel_row in selecionadas.iterrows():
+                        orig = df_disponiveis[df_disponiveis["numero_nf"].astype(str) == str(sel_row["numero_nf"])].iloc[0]
+                        nfs_selecionadas_op.append({
+                            "aparas_id": str(orig["id"]),
+                            "nf_apara": str(orig["numero_nf"]),
+                            "fornecedor": str(orig["fornecedor"]),
+                            "tipo_fardo": str(orig["tipo_fardo"]),
+                            "quant_fardos": int(orig["quantidade"]),
+                            "peso_kg": float(orig["peso_kg"]),
+                            "qualidade": str(orig.get("qualidade", "")),
+                            "obs": "",
+                        })
+
+                    peso_total = sum(nf["peso_kg"] for nf in nfs_selecionadas_op)
+                    total_fardos = sum(nf["quant_fardos"] for nf in nfs_selecionadas_op)
+                    col_t1, col_t2, col_t3 = st.columns(3)
+                    col_t1.metric("NFs selecionadas", len(nfs_selecionadas_op))
+                    col_t2.metric("Total Fardos", total_fardos)
+                    col_t3.metric("Peso Total", formatar_peso(peso_total))
+                else:
+                    st.info("Selecione as NFs marcando a coluna 'Selecionar'.")
 
     # -----------------------------------------------------------------------
     # Botao: Criar OP
@@ -127,8 +143,8 @@ with tab_nova:
             erros.append("Cliente e obrigatorio.")
         if volume_ton <= 0:
             erros.append("Volume deve ser maior que zero.")
-        if not st.session_state.nfs_temp:
-            erros.append("Adicione pelo menos uma NF antes de criar a OP.")
+        if not nfs_selecionadas_op:
+            erros.append("Selecione pelo menos uma NF do estoque antes de criar a OP.")
 
         if erros:
             for e in erros:
@@ -150,7 +166,8 @@ with tab_nova:
                 op_id = resultado["id"]
 
                 nfs_salvas = []
-                for nf in st.session_state.nfs_temp:
+                aparas_ids = []
+                for nf in nfs_selecionadas_op:
                     nf_data = {
                         "op_lavacao_id": op_id,
                         "nf_apara": nf["nf_apara"],
@@ -158,12 +175,16 @@ with tab_nova:
                         "tipo_fardo": nf["tipo_fardo"],
                         "quant_fardos": nf["quant_fardos"],
                         "peso_kg": nf["peso_kg"],
-                        "obs": nf["obs"],
+                        "obs": nf.get("obs", ""),
                     }
                     append_row("op_lavacao_nfs", nf_data)
                     nfs_salvas.append(nf_data)
+                    aparas_ids.append(nf["aparas_id"])
 
-                st.session_state.nfs_temp = []
+                if aparas_ids:
+                    update_rows("aparas_estoque", "id", aparas_ids, "status", "em_uso")
+                    update_rows("aparas_estoque", "id", aparas_ids, "opl_em_uso", numero_op)
+
                 st.toast("OP criada com sucesso!")
                 st.success(f"OP **{numero_op}** criada com {len(nfs_salvas)} NFs vinculadas!")
 

@@ -11,6 +11,7 @@ SCOPES = [
 ]
 
 WORKSHEETS = [
+    "aparas_estoque",
     "op_lavacao", "op_lavacao_nfs", "producao_lavacao", "paradas_lavacao",
     "op_extrusao", "producao_extrusao", "manutencao_extrusao",
     "qualidade", "romaneio", "romaneio_itens", "mistura",
@@ -134,6 +135,11 @@ def init_spreadsheet():
     sp = get_spreadsheet()
     existing = [ws.title for ws in sp.worksheets()]
     headers_map = {
+        "aparas_estoque": ["id", "numero_nf", "fornecedor", "tipo_fardo",
+                           "quantidade", "peso_kg", "data_recebimento",
+                           "qualidade", "status", "opl_em_uso",
+                           "data_classificacao", "classificado_por",
+                           "registrado_por", "observacao", "created_at"],
         "op_lavacao": ["id", "numero_op", "data", "responsavel", "cliente",
                        "volume_ton", "produto", "indice_fluidez", "status",
                        "observacao", "created_at"],
