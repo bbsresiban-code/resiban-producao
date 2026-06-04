@@ -106,6 +106,29 @@ def update_rows(worksheet_name: str, match_col: str, match_values: list,
     _bump_version(worksheet_name)
 
 
+def update_row_multi(worksheet_name: str, match_col: str, match_value,
+                     updates: dict):
+    """Atualiza varias colunas de uma vez para uma linha. Reduz chamadas API."""
+    sp = get_spreadsheet()
+    ws = sp.worksheet(worksheet_name)
+    headers = ws.row_values(1)
+    match_idx = headers.index(match_col) + 1
+    all_values = ws.col_values(match_idx)
+    cells_to_update = []
+    target_str = str(match_value)
+    for i, val in enumerate(all_values):
+        if val == target_str:
+            row_num = i + 1
+            for col_name, new_value in updates.items():
+                if col_name in headers:
+                    col_idx = headers.index(col_name) + 1
+                    cells_to_update.append(gspread.Cell(row_num, col_idx, new_value))
+            break
+    if cells_to_update:
+        ws.update_cells(cells_to_update)
+    _bump_version(worksheet_name)
+
+
 def proximo_sequencial(worksheet_name: str, coluna: str, prefixo: str) -> str:
     try:
         df = read_sheet(worksheet_name, ttl=60)

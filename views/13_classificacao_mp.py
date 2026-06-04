@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
 
-from utils.database import read_sheet, read_sheet_no_cache, update_rows
+from utils.database import read_sheet, read_sheet_no_cache, update_row_multi
 from utils.formatters import formatar_data, formatar_peso
 
 # ---------------------------------------------------------------------------
@@ -177,42 +177,17 @@ with tab_classificar:
                                     )
                                 obs_final = " | ".join(partes_obs)
 
-                                match_values = [id_selecionado]
-
-                                update_rows(
+                                update_row_multi(
                                     "aparas_estoque",
                                     "id",
-                                    match_values,
-                                    "qualidade",
-                                    qualidade,
-                                )
-                                update_rows(
-                                    "aparas_estoque",
-                                    "id",
-                                    match_values,
-                                    "status",
-                                    "disponivel",
-                                )
-                                update_rows(
-                                    "aparas_estoque",
-                                    "id",
-                                    match_values,
-                                    "data_classificacao",
-                                    data_classificacao.isoformat(),
-                                )
-                                update_rows(
-                                    "aparas_estoque",
-                                    "id",
-                                    match_values,
-                                    "classificado_por",
-                                    classificado_por.strip(),
-                                )
-                                update_rows(
-                                    "aparas_estoque",
-                                    "id",
-                                    match_values,
-                                    "observacao",
-                                    obs_final,
+                                    id_selecionado,
+                                    {
+                                        "qualidade": qualidade,
+                                        "status": "disponivel",
+                                        "data_classificacao": data_classificacao.isoformat(),
+                                        "classificado_por": classificado_por.strip(),
+                                        "observacao": obs_final,
+                                    },
                                 )
 
                                 st.success(

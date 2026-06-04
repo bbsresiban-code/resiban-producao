@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
 
-from utils.database import read_sheet, read_sheet_no_cache, append_row, update_rows
+from utils.database import read_sheet, read_sheet_no_cache, append_row, update_rows, update_row_multi
 from utils.formatters import (
     formatar_data,
     formatar_peso,
@@ -277,8 +277,7 @@ with tab_editar:
                         "analista": analista_edit.strip(),
                         "observacao": obs_edit.strip(),
                     }
-                    for coluna, valor in novos_valores.items():
-                        update_rows("qualidade", "id", [analise_id], coluna, valor)
+                    update_row_multi("qualidade", "id", analise_id, novos_valores)
 
                     st.success(f"Analise do lote **{lote_edit}** atualizada. Novo grade: **{grade_edit} - {cor_edit}**")
                     st.toast("Analise atualizada!")
