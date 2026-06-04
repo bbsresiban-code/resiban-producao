@@ -117,18 +117,18 @@ with tab_nova:
     col_ad1, col_ad2 = st.columns(2)
     with col_ad1:
         aditivo_percentual = st.number_input(
-            "Aditivo (%)", min_value=0.0, max_value=100.0, step=0.1, value=None, format="%.1f",
+            "Aditivo (%)", min_value=0.0, max_value=100.0, step=0.01, value=None, format="%.2f",
             key="ope_aditivo_pct",
-            help="Percentual de aditivo no material",
+            help="Percentual de aditivo no material (aceita ate 2 casas decimais)",
         )
 
     aditivo_kg_total = volume_ton * 1000 * ((aditivo_percentual or 0) / 100)
     perc_reciclado_op = 100 - (aditivo_percentual or 0)
     if (aditivo_percentual or 0) > 0 and volume_ton > 0:
         st.info(
-            f"Aditivo total: **{aditivo_kg_total:,.1f} kg** "
-            f"({(aditivo_percentual or 0):.1f}% de {volume_ton:.2f} ton)  \n"
-            f"Conteudo reciclado: **{perc_reciclado_op:.1f}%**"
+            f"Aditivo total: **{aditivo_kg_total:,.2f} kg** "
+            f"({(aditivo_percentual or 0):.2f}% de {volume_ton:.2f} ton)  \n"
+            f"Conteudo reciclado: **{perc_reciclado_op:.2f}%**"
         )
 
     observacao = st.text_area("Observacao", key="ope_obs")
