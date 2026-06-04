@@ -101,19 +101,19 @@ with tab_lote:
         col_f1, col_f2 = st.columns(2)
         with col_f1:
             peso_kg = st.number_input(
-                "Peso (kg)", min_value=0.0, step=0.5, format="%.1f", key="lote_peso"
+                "Peso (kg)", min_value=0.0, step=0.5, format="%.1f", key="lote_peso", value=None
             )
             hora = st.time_input("Hora", value=time(8, 0), key="lote_hora")
             aditivo_gramas = st.number_input(
-                "Aditivo (gramas)", min_value=0.0, step=10.0, value=0.0, format="%.1f",
+                "Aditivo (gramas)", min_value=0.0, step=10.0, value=None, format="%.1f",
                 key="lote_aditivo_g",
                 help="Quantidade de aditivo neste lote",
             )
         with col_f2:
             observacao_lote = st.text_input("Observacao", key="lote_obs")
             registrado_por = st.text_input("Registrado por", key="lote_reg")
-            if peso_kg > 0:
-                perc_reciclado_lote = ((peso_kg * 1000 - aditivo_gramas) / (peso_kg * 1000)) * 100
+            if peso_kg and peso_kg > 0:
+                perc_reciclado_lote = ((peso_kg * 1000 - (aditivo_gramas or 0)) / (peso_kg * 1000)) * 100
                 st.metric("Conteudo Reciclado", f"{perc_reciclado_lote:.2f}%")
             else:
                 perc_reciclado_lote = 0.0
@@ -129,15 +129,15 @@ with tab_lote:
             col_tt1, col_tt2 = st.columns(2)
             with col_tt1:
                 qtd_1o_estagio = st.number_input(
-                    "Telas 1o Estagio", min_value=0, step=1, value=0,
+                    "Telas 1o Estagio", min_value=0, step=1, value=None,
                     key="lote_telas_1e",
                 )
             with col_tt2:
                 qtd_2o_estagio = st.number_input(
-                    "Telas 2o Estagio", min_value=0, step=1, value=0,
+                    "Telas 2o Estagio", min_value=0, step=1, value=None,
                     key="lote_telas_2e",
                 )
-            qtd_troca_telas = qtd_1o_estagio + qtd_2o_estagio
+            qtd_troca_telas = (qtd_1o_estagio or 0) + (qtd_2o_estagio or 0)
             troca_telas = "Sim"
         else:
             col_tt1, col_tt2 = st.columns(2)
@@ -150,7 +150,7 @@ with tab_lote:
             with col_tt2:
                 if troca_telas == "Sim":
                     qtd_troca_telas = st.number_input(
-                        "Quantas telas?", min_value=1, step=1, value=1,
+                        "Quantas telas?", min_value=1, step=1, value=None,
                         key="lote_qtd_telas",
                     )
 
@@ -158,11 +158,11 @@ with tab_lote:
 
         if submitted:
             erros = []
-            if peso_kg <= 0:
+            if not peso_kg or peso_kg <= 0:
                 erros.append("Peso deve ser maior que zero.")
             if not registrado_por.strip():
                 erros.append("Campo 'Registrado por' e obrigatorio.")
-            if extrusora == "A" and qtd_troca_telas == 0:
+            if extrusora == "A" and (qtd_troca_telas or 0) == 0:
                 erros.append("Extrusora A: informe a quantidade de telas trocadas (1o e/ou 2o estagio).")
 
             if erros:
@@ -184,10 +184,10 @@ with tab_lote:
                         "tipo": tipo,
                         "tipo_descricao": TIPOS_PRODUTO[tipo],
                         "extrusora": extrusora,
-                        "peso_kg": peso_kg,
-                        "aditivo_gramas": float(aditivo_gramas),
+                        "peso_kg": float(peso_kg or 0),
+                        "aditivo_gramas": float(aditivo_gramas or 0),
                         "perc_reciclado": round(perc_reciclado_lote, 2),
-                        "troca_telas": f"Sim (1E:{qtd_1o_estagio} 2E:{qtd_2o_estagio})" if extrusora == "A" else (f"Sim ({qtd_troca_telas})" if troca_telas == "Sim" else "Nao"),
+                        "troca_telas": f"Sim (1E:{int(qtd_1o_estagio or 0)} 2E:{int(qtd_2o_estagio or 0)})" if extrusora == "A" else (f"Sim ({int(qtd_troca_telas or 0)})" if troca_telas == "Sim" else "Nao"),
                         "mes": data_lote.month,
                         "ano": data_lote.year % 100,
                         "sequencial": sequencial,

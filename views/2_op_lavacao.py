@@ -33,7 +33,7 @@ with tab_nova:
         responsavel = st.text_input("Responsavel", key="op_lav_resp")
         cliente = st.text_input("Cliente", key="op_lav_cliente")
     with col2:
-        volume_ton = st.number_input("Volume (ton)", min_value=0.0, step=0.5, format="%.1f", key="op_lav_vol")
+        volume_ton = st.number_input("Volume (ton)", min_value=0.0, step=0.5, format="%.1f", key="op_lav_vol", value=None)
         produto = st.text_input("Produto", key="op_lav_prod")
         indice_fluidez = st.text_input("Indice de Fluidez", key="op_lav_mfi")
 
@@ -141,7 +141,7 @@ with tab_nova:
             erros.append("Responsavel e obrigatorio.")
         if not cliente.strip():
             erros.append("Cliente e obrigatorio.")
-        if volume_ton <= 0:
+        if not volume_ton or volume_ton <= 0:
             erros.append("Volume deve ser maior que zero.")
         if not nfs_selecionadas_op:
             erros.append("Selecione pelo menos uma NF do estoque antes de criar a OP.")
@@ -156,7 +156,7 @@ with tab_nova:
                     "data": data_op.isoformat(),
                     "responsavel": responsavel.strip(),
                     "cliente": cliente.strip(),
-                    "volume_ton": volume_ton,
+                    "volume_ton": float(volume_ton or 0),
                     "produto": produto.strip(),
                     "indice_fluidez": indice_fluidez.strip(),
                     "status": "aberta",
@@ -258,9 +258,9 @@ with tab_editar:
                         edit_fornec = st.text_input("Fornecedor", key="edit_fornec")
                     with col_e2:
                         edit_tipo = st.selectbox("Tipo de Fardo", ["Fardinho", "Fardao"], key="edit_tipo")
-                        edit_qtd = st.number_input("Quantidade de Fardos", min_value=0, step=1, key="edit_qtd")
+                        edit_qtd = st.number_input("Quantidade de Fardos", min_value=0, step=1, key="edit_qtd", value=None)
                     with col_e3:
-                        edit_peso = st.number_input("Peso (kg)", min_value=0.0, step=0.5, format="%.1f", key="edit_peso")
+                        edit_peso = st.number_input("Peso (kg)", min_value=0.0, step=0.5, format="%.1f", key="edit_peso", value=None)
                         edit_obs = st.text_input("Observacao", key="edit_obs")
 
                     edit_submit = st.form_submit_button("Adicionar NF", type="primary", use_container_width=True)
@@ -269,9 +269,9 @@ with tab_editar:
                     erros_edit = []
                     if not edit_nf.strip():
                         erros_edit.append("NF Apara e obrigatoria.")
-                    if edit_qtd <= 0:
+                    if not edit_qtd or edit_qtd <= 0:
                         erros_edit.append("Quantidade deve ser maior que zero.")
-                    if edit_peso <= 0:
+                    if not edit_peso or edit_peso <= 0:
                         erros_edit.append("Peso deve ser maior que zero.")
 
                     if erros_edit:
@@ -284,8 +284,8 @@ with tab_editar:
                                 "nf_apara": edit_nf.strip(),
                                 "fornecedor": edit_fornec.strip(),
                                 "tipo_fardo": edit_tipo,
-                                "quant_fardos": edit_qtd,
-                                "peso_kg": edit_peso,
+                                "quant_fardos": int(edit_qtd or 0),
+                                "peso_kg": float(edit_peso or 0),
                                 "obs": edit_obs.strip(),
                             }
                             append_row("op_lavacao_nfs", nf_nova)

@@ -60,7 +60,7 @@ with tab_novo:
             "Quantidade *",
             min_value=1,
             step=1,
-            value=1,
+            value=None,
             key="rec_quantidade",
         )
     with col_t3:
@@ -69,7 +69,7 @@ with tab_novo:
             min_value=0.0,
             step=0.5,
             format="%.1f",
-            value=0.0,
+            value=None,
             key="rec_peso_kg",
         )
 
@@ -90,9 +90,9 @@ with tab_novo:
             erros.append("Informe o fornecedor.")
         if not tipo_fardo:
             erros.append("Selecione o tipo de fardo.")
-        if quantidade < 1:
+        if not quantidade or quantidade < 1:
             erros.append("Quantidade deve ser maior que zero.")
-        if peso_kg <= 0:
+        if not peso_kg or peso_kg <= 0:
             erros.append("Peso deve ser maior que zero.")
         if not registrado_por.strip():
             erros.append("Informe o nome do responsavel pelo registro.")
@@ -106,8 +106,8 @@ with tab_novo:
                     "numero_nf": numero_nf.strip(),
                     "fornecedor": fornecedor.strip(),
                     "tipo_fardo": tipo_fardo,
-                    "quantidade": int(quantidade),
-                    "peso_kg": float(peso_kg),
+                    "quantidade": int(quantidade or 0),
+                    "peso_kg": float(peso_kg or 0),
                     "data_recebimento": data_recebimento.isoformat(),
                     "qualidade": "",
                     "status": "aguardando_classificacao",
@@ -124,8 +124,8 @@ with tab_novo:
                     f"NF **{numero_nf.strip()}** registrada com sucesso!  \n"
                     f"**Fornecedor:** {fornecedor.strip()}  \n"
                     f"**Tipo de Fardo:** {tipo_fardo}  \n"
-                    f"**Quantidade:** {int(quantidade)} fardos  \n"
-                    f"**Peso:** {formatar_peso(float(peso_kg))}  \n"
+                    f"**Quantidade:** {int(quantidade or 0)} fardos  \n"
+                    f"**Peso:** {formatar_peso(float(peso_kg or 0))}  \n"
                     f"**Status:** aguardando_classificacao"
                 )
                 st.balloons()

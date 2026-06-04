@@ -195,6 +195,7 @@ with tab_lancamento:
                             max_value=qtd_restante,
                             step=1,
                             key=f"qtd_nf_{idx_nf}",
+                            value=None,
                         )
                     with col_f2:
                         peso_kg = st.number_input(
@@ -204,6 +205,7 @@ with tab_lancamento:
                             step=0.5,
                             format="%.1f",
                             key=f"peso_nf_{idx_nf}",
+                            value=None,
                         )
                     submit_nf = st.form_submit_button(
                         f"Registrar {nf_tipo}",
@@ -213,9 +215,9 @@ with tab_lancamento:
 
                 if submit_nf:
                     erros = []
-                    if quantidade <= 0:
+                    if not quantidade or quantidade <= 0:
                         erros.append("Quantidade deve ser maior que zero.")
-                    if peso_kg <= 0:
+                    if not peso_kg or peso_kg <= 0:
                         erros.append("Peso deve ser maior que zero.")
                     if erros:
                         for e in erros:
@@ -228,8 +230,8 @@ with tab_lancamento:
                                 "numero_op": numero_op,
                                 "tipo_fardo": nf_tipo.lower(),
                                 "nf": nf_numero,
-                                "quantidade": quantidade,
-                                "peso_kg": peso_kg,
+                                "quantidade": int(quantidade or 0),
+                                "peso_kg": float(peso_kg or 0),
                                 "perda_lixo_kg": 0,
                                 "perda_papelao_kg": 0,
                                 "perda_plastico_colorido_kg": 0,
@@ -240,7 +242,7 @@ with tab_lancamento:
                             st.toast(f"{nf_tipo} registrado com sucesso!")
                             st.success(
                                 f"{nf_tipo} NF **{nf_numero}** - "
-                                f"{quantidade} un / {formatar_peso(peso_kg)} registrado."
+                                f"{int(quantidade or 0)} un / {formatar_peso(float(peso_kg or 0))} registrado."
                             )
                             st.rerun()
                         except Exception as exc:
@@ -269,6 +271,7 @@ with tab_lancamento:
                     step=0.1,
                     format="%.1f",
                     key="perda_lixo",
+                    value=None,
                 )
             with col_p2:
                 perda_papelao = st.number_input(
@@ -277,6 +280,7 @@ with tab_lancamento:
                     step=0.1,
                     format="%.1f",
                     key="perda_papelao",
+                    value=None,
                 )
             with col_p3:
                 perda_plastico = st.number_input(
@@ -285,6 +289,7 @@ with tab_lancamento:
                     step=0.1,
                     format="%.1f",
                     key="perda_plastico",
+                    value=None,
                 )
 
             registrado_por = st.text_input(
@@ -295,11 +300,11 @@ with tab_lancamento:
                 "Registrar Perdas", use_container_width=True
             )
 
-        perda_total_display = perda_lixo + perda_papelao + perda_plastico
+        perda_total_display = (perda_lixo or 0) + (perda_papelao or 0) + (perda_plastico or 0)
         st.metric("Perda Total", formatar_peso(perda_total_display))
 
         if submit_perdas:
-            perda_total = perda_lixo + perda_papelao + perda_plastico
+            perda_total = (perda_lixo or 0) + (perda_papelao or 0) + (perda_plastico or 0)
             erros = []
             if perda_total <= 0:
                 erros.append("Informe ao menos um tipo de perda.")
@@ -318,9 +323,9 @@ with tab_lancamento:
                         "nf": "",
                         "quantidade": 0,
                         "peso_kg": 0,
-                        "perda_lixo_kg": perda_lixo,
-                        "perda_papelao_kg": perda_papelao,
-                        "perda_plastico_colorido_kg": perda_plastico,
+                        "perda_lixo_kg": float(perda_lixo or 0),
+                        "perda_papelao_kg": float(perda_papelao or 0),
+                        "perda_plastico_colorido_kg": float(perda_plastico or 0),
                         "perda_total_kg": perda_total,
                         "registrado_por": registrado_por.strip(),
                     }

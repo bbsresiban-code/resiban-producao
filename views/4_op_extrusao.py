@@ -32,24 +32,24 @@ with tab_nova:
         responsavel = st.text_input("Responsavel", key="ope_resp")
         cliente = st.text_input("Cliente", key="ope_cliente")
         volume_ton = st.number_input(
-            "Volume (ton)", min_value=0.0, step=0.5, format="%.1f", key="ope_vol"
+            "Volume (ton)", min_value=0.0, step=0.5, format="%.1f", key="ope_vol", value=None
         )
     with col2:
         origem = st.selectbox("Origem do Material", ["Proprio", "Servico"], key="ope_origem")
         produto = st.text_input("Produto", key="ope_prod")
         maquina = st.selectbox("Maquina", options=EXTRUSORAS, format_func=lambda x: f"Extrusora {x}", key="ope_maq")
         aditivo_percentual = st.number_input(
-            "Aditivo (%)", min_value=0.0, max_value=100.0, step=0.1, value=0.0, format="%.1f",
+            "Aditivo (%)", min_value=0.0, max_value=100.0, step=0.1, value=None, format="%.1f",
             key="ope_aditivo_pct",
             help="Percentual de aditivo no material",
         )
 
-    aditivo_kg_total = volume_ton * 1000 * (aditivo_percentual / 100)
-    perc_reciclado_op = 100 - aditivo_percentual
-    if aditivo_percentual > 0:
+    aditivo_kg_total = (volume_ton or 0) * 1000 * ((aditivo_percentual or 0) / 100)
+    perc_reciclado_op = 100 - (aditivo_percentual or 0)
+    if (aditivo_percentual or 0) > 0:
         st.info(
             f"Aditivo total: **{aditivo_kg_total:,.1f} kg** "
-            f"({aditivo_percentual:.1f}% de {volume_ton} ton)  \n"
+            f"({(aditivo_percentual or 0):.1f}% de {(volume_ton or 0)} ton)  \n"
             f"Conteudo reciclado: **{perc_reciclado_op:.1f}%**"
         )
 
@@ -91,13 +91,13 @@ with tab_nova:
                     "data": data_op.isoformat(),
                     "responsavel": responsavel.strip(),
                     "cliente": cliente.strip(),
-                    "volume_ton": volume_ton,
+                    "volume_ton": float(volume_ton or 0),
                     "origem": origem,
                     "tipo_lote": tipo_lote,
                     "opl_origem": opl_vinculada if origem == "Proprio" else "",
                     "produto": produto.strip(),
                     "maquina": maquina,
-                    "aditivo_percentual": float(aditivo_percentual),
+                    "aditivo_percentual": float(aditivo_percentual or 0),
                     "aditivo_kg_total": float(aditivo_kg_total),
                     "data_inicio": "",
                     "data_final": "",
@@ -281,7 +281,7 @@ with tab_fechar:
                 producao_final_kg = st.number_input(
                     "Producao Final (kg)",
                     min_value=0.0,
-                    value=float(total_kg),
+                    value=None,
                     step=0.5,
                     format="%.1f",
                 )
@@ -291,6 +291,7 @@ with tab_fechar:
                     max_value=100.0,
                     step=0.1,
                     format="%.2f",
+                    value=None,
                 )
 
                 fechar = st.form_submit_button(
@@ -312,13 +313,13 @@ with tab_fechar:
                                     ws.update_cell(
                                         idx,
                                         headers.index("producao_final_kg") + 1,
-                                        producao_final_kg,
+                                        float(producao_final_kg or 0),
                                     )
                                 if "perda_percentual" in headers:
                                     ws.update_cell(
                                         idx,
                                         headers.index("perda_percentual") + 1,
-                                        perda_percentual,
+                                        float(perda_percentual or 0),
                                     )
                                 if "data_final" in headers:
                                     ws.update_cell(
@@ -331,8 +332,8 @@ with tab_fechar:
                         st.cache_data.clear()
                         st.success(
                             f"OP {op_sel} fechada com sucesso! "
-                            f"Producao: {formatar_peso(producao_final_kg)} | "
-                            f"Perda: {formatar_percentual(perda_percentual)}"
+                            f"Producao: {formatar_peso(float(producao_final_kg or 0))} | "
+                            f"Perda: {formatar_percentual(float(perda_percentual or 0))}"
                         )
                     except Exception as exc:
                         st.error(f"Erro ao fechar OP: {exc}")
