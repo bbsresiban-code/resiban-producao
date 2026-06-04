@@ -58,7 +58,9 @@ def read_sheet_no_cache(worksheet_name: str) -> pd.DataFrame:
 def _serialize_value(v):
     if v is None:
         return None
-    if isinstance(v, (int, float, str, bool)):
+    if isinstance(v, str):
+        return v if v.strip() else None
+    if isinstance(v, (int, float, bool)):
         return v
     if hasattr(v, "isoformat"):
         return v.isoformat()
