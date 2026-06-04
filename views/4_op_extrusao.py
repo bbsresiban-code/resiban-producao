@@ -31,29 +31,14 @@ with tab_nova:
         data_op = st.date_input("Data", value=date.today(), key="ope_data")
         responsavel = st.text_input("Responsavel", key="ope_resp")
         cliente = st.text_input("Cliente", key="ope_cliente")
-        volume_ton = st.number_input(
-            "Volume (ton)", min_value=0.0, step=0.5, format="%.1f", key="ope_vol", value=None
-        )
     with col2:
         origem = st.selectbox("Origem do Material", ["Proprio", "Servico"], key="ope_origem")
         produto = st.text_input("Produto", key="ope_prod")
         maquina = st.selectbox("Maquina", options=EXTRUSORAS, format_func=lambda x: f"Extrusora {x}", key="ope_maq")
-        aditivo_percentual = st.number_input(
-            "Aditivo (%)", min_value=0.0, max_value=100.0, step=0.1, value=None, format="%.1f",
-            key="ope_aditivo_pct",
-            help="Percentual de aditivo no material",
-        )
-
-    aditivo_kg_total = (volume_ton or 0) * 1000 * ((aditivo_percentual or 0) / 100)
-    perc_reciclado_op = 100 - (aditivo_percentual or 0)
-    if (aditivo_percentual or 0) > 0:
-        st.info(
-            f"Aditivo total: **{aditivo_kg_total:,.1f} kg** "
-            f"({(aditivo_percentual or 0):.1f}% de {(volume_ton or 0)} ton)  \n"
-            f"Conteudo reciclado: **{perc_reciclado_op:.1f}%**"
-        )
 
     opl_vinculada = ""
+    volume_ton = 0.0
+
     if origem == "Proprio":
         try:
             df_opl = read_sheet("op_lavacao")
@@ -64,12 +49,38 @@ with tab_nova:
                     options=opls_disponiveis,
                     key="ope_opl_origem",
                 )
+                if opl_vinculada:
+                    opl_row = df_opl[df_opl["numero_op"].astype(str) == opl_vinculada]
+                    if not opl_row.empty:
+                        volume_ton = float(opl_row.iloc[0].get("volume_ton", 0) or 0)
+                        st.success(f"Volume puxado da OPL **{opl_vinculada}**: **{volume_ton:.2f} ton** ({volume_ton * 1000:,.1f} kg)")
             else:
                 st.warning("Nenhuma OPL cadastrada.")
         except Exception:
             st.warning("Erro ao carregar OPLs.")
     else:
-        st.info("Servico de industrializacao - sem vinculo com OPL.")
+        st.info("Servico de industrializacao - informe o volume manualmente.")
+        volume_ton = st.number_input(
+            "Volume (ton)", min_value=0.0, step=0.5, format="%.2f",
+            key="ope_vol_servico", value=None,
+        ) or 0.0
+
+    col_ad1, col_ad2 = st.columns(2)
+    with col_ad1:
+        aditivo_percentual = st.number_input(
+            "Aditivo (%)", min_value=0.0, max_value=100.0, step=0.1, value=None, format="%.1f",
+            key="ope_aditivo_pct",
+            help="Percentual de aditivo no material",
+        )
+
+    aditivo_kg_total = volume_ton * 1000 * ((aditivo_percentual or 0) / 100)
+    perc_reciclado_op = 100 - (aditivo_percentual or 0)
+    if (aditivo_percentual or 0) > 0 and volume_ton > 0:
+        st.info(
+            f"Aditivo total: **{aditivo_kg_total:,.1f} kg** "
+            f"({(aditivo_percentual or 0):.1f}% de {volume_ton:.2f} ton)  \n"
+            f"Conteudo reciclado: **{perc_reciclado_op:.1f}%**"
+        )
 
     observacao = st.text_area("Observacao", key="ope_obs")
 
@@ -79,6 +90,8 @@ with tab_nova:
             erros.append("Responsavel e obrigatorio.")
         if origem == "Proprio" and not opl_vinculada:
             erros.append("Selecione a OPL de origem.")
+        if origem == "Servico" and (not volume_ton or volume_ton <= 0):
+            erros.append("Informe o volume manualmente para OPE de servico.")
 
         if erros:
             for e in erros:
