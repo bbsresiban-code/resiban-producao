@@ -33,7 +33,6 @@ with tab_nova:
         responsavel = st.text_input("Responsavel", key="op_lav_resp")
         cliente = st.text_input("Cliente", key="op_lav_cliente")
     with col2:
-        volume_ton = st.number_input("Volume (ton)", min_value=0.0, step=0.5, format="%.1f", key="op_lav_vol", value=None)
         produto = st.text_input("Produto", key="op_lav_prod")
         indice_fluidez = st.text_input("Indice de Fluidez", key="op_lav_mfi")
 
@@ -124,10 +123,11 @@ with tab_nova:
 
                     peso_total = sum(nf["peso_kg"] for nf in nfs_selecionadas_op)
                     total_fardos = sum(nf["quant_fardos"] for nf in nfs_selecionadas_op)
-                    col_t1, col_t2, col_t3 = st.columns(3)
+                    col_t1, col_t2, col_t3, col_t4 = st.columns(4)
                     col_t1.metric("NFs selecionadas", len(nfs_selecionadas_op))
                     col_t2.metric("Total Fardos", total_fardos)
                     col_t3.metric("Peso Total", formatar_peso(peso_total))
+                    col_t4.metric("Volume (ton)", f"{peso_total / 1000:.2f}")
                 else:
                     st.info("Selecione as NFs marcando a coluna 'Selecionar'.")
 
@@ -141,8 +141,6 @@ with tab_nova:
             erros.append("Responsavel e obrigatorio.")
         if not cliente.strip():
             erros.append("Cliente e obrigatorio.")
-        if not volume_ton or volume_ton <= 0:
-            erros.append("Volume deve ser maior que zero.")
         if not nfs_selecionadas_op:
             erros.append("Selecione pelo menos uma NF do estoque antes de criar a OP.")
 
@@ -151,12 +149,13 @@ with tab_nova:
                 st.error(e)
         else:
             try:
+                volume_ton_calc = sum(nf["peso_kg"] for nf in nfs_selecionadas_op) / 1000
                 op_data = {
                     "numero_op": numero_op,
                     "data": data_op.isoformat(),
                     "responsavel": responsavel.strip(),
                     "cliente": cliente.strip(),
-                    "volume_ton": float(volume_ton or 0),
+                    "volume_ton": float(volume_ton_calc),
                     "produto": produto.strip(),
                     "indice_fluidez": indice_fluidez.strip(),
                     "status": "aberta",
