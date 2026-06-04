@@ -58,12 +58,61 @@ with tab_nova:
                 st.warning("Nenhuma OPL cadastrada.")
         except Exception:
             st.warning("Erro ao carregar OPLs.")
-    else:
-        st.info("Servico de industrializacao - informe o volume manualmente.")
-        volume_ton = st.number_input(
-            "Volume (ton)", min_value=0.0, step=0.5, format="%.2f",
-            key="ope_vol_servico", value=None,
-        ) or 0.0
+    aparas_servico_ids = []
+    if origem == "Servico":
+        st.info("Servico de industrializacao - selecione as aparas de servico.")
+        try:
+            df_aparas_serv = read_sheet("aparas_estoque")
+            if not df_aparas_serv.empty and "tipo_material" in df_aparas_serv.columns:
+                df_serv_disp = df_aparas_serv[
+                    (df_aparas_serv["tipo_material"].astype(str) == "Servico")
+                    & (df_aparas_serv["status"].astype(str) == "disponivel")
+                ].copy()
+                if df_serv_disp.empty:
+                    st.warning("Nenhuma apara de Servico classificada e disponivel.")
+                    volume_ton = st.number_input(
+                        "Volume (ton) - manual", min_value=0.0, step=0.5, format="%.2f",
+                        key="ope_vol_servico_manual", value=None,
+                    ) or 0.0
+                else:
+                    df_serv_disp["peso_kg"] = pd.to_numeric(df_serv_disp["peso_kg"], errors="coerce").fillna(0)
+                    df_serv_disp["selecionar"] = False
+                    df_serv_view = df_serv_disp[
+                        ["selecionar", "numero_nf", "fornecedor", "qualidade", "tipo_fardo", "quantidade", "peso_kg"]
+                    ].copy()
+                    edited_serv = st.data_editor(
+                        df_serv_view, use_container_width=True, hide_index=True,
+                        disabled=["numero_nf", "fornecedor", "qualidade", "tipo_fardo", "quantidade", "peso_kg"],
+                        column_config={
+                            "selecionar": st.column_config.CheckboxColumn("Selecionar"),
+                            "numero_nf": "NF", "fornecedor": "Fornecedor",
+                            "qualidade": "Qual.", "tipo_fardo": "Tipo",
+                            "quantidade": "Qtd", "peso_kg": "Peso (kg)",
+                        },
+                        key="ope_serv_editor",
+                    )
+                    sel_serv = edited_serv[edited_serv["selecionar"] == True]
+                    if not sel_serv.empty:
+                        peso_sel = 0.0
+                        for _, r in sel_serv.iterrows():
+                            orig_r = df_serv_disp[df_serv_disp["numero_nf"].astype(str) == str(r["numero_nf"])].iloc[0]
+                            aparas_servico_ids.append(str(orig_r["id"]))
+                            peso_sel += float(orig_r["peso_kg"])
+                        volume_ton = peso_sel / 1000
+                        st.success(f"Volume das aparas selecionadas: **{volume_ton:.2f} ton** ({peso_sel:,.1f} kg)")
+                    else:
+                        volume_ton = 0.0
+                        st.info("Selecione as aparas de servico marcando 'Selecionar'.")
+            else:
+                volume_ton = st.number_input(
+                    "Volume (ton)", min_value=0.0, step=0.5, format="%.2f",
+                    key="ope_vol_servico", value=None,
+                ) or 0.0
+        except Exception:
+            volume_ton = st.number_input(
+                "Volume (ton)", min_value=0.0, step=0.5, format="%.2f",
+                key="ope_vol_servico_err", value=None,
+            ) or 0.0
 
     col_ad1, col_ad2 = st.columns(2)
     with col_ad1:
@@ -121,6 +170,9 @@ with tab_nova:
                     "observacao": observacao.strip(),
                 }
                 append_row("op_extrusao", dados)
+                if origem == "Servico" and aparas_servico_ids:
+                    update_rows("aparas_estoque", "id", aparas_servico_ids, "status", "em_uso")
+                    update_rows("aparas_estoque", "id", aparas_servico_ids, "opl_em_uso", numero_op.strip().upper())
                 st.success(f"OP {numero_op.strip().upper()} criada com sucesso!")
 
                 # Botao para baixar PDF da OP recem-criada

@@ -4,6 +4,11 @@ import uuid
 from datetime import datetime
 from supabase import create_client, Client
 
+# Schema atual da tabela aparas_estoque:
+# id, numero_nf, fornecedor, tipo_material (Proprio/Servico), tipo_fardo,
+# quantidade, peso_kg, data_recebimento, qualidade, status, opl_em_uso,
+# data_classificacao, classificado_por, registrado_por, observacao, created_at
+
 WORKSHEETS = [
     "aparas_estoque",
     "op_lavacao", "op_lavacao_nfs", "producao_lavacao", "paradas_lavacao",

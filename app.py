@@ -37,6 +37,7 @@ PAGINAS_POR_PERFIL = {
         "Laudos",
         "Exportar",
         "Inventario",
+        "Controle Servico",
     ],
     "turno": [
         "Producao Lavacao",
@@ -51,6 +52,7 @@ PAGINAS_POR_PERFIL = {
         "Laudos",
         "Exportar",
         "Inventario",
+        "Controle Servico",
     ],
     "qualidade": [
         "Classificacao MP",
@@ -79,6 +81,7 @@ PAGINAS_MAP = {
     "Laudos": "views/10_laudos.py",
     "Exportar": "views/9_exportar.py",
     "Inventario": "views/15_inventario.py",
+    "Controle Servico": "views/16_controle_servico.py",
 }
 
 if "logado" not in st.session_state:

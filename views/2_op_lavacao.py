@@ -54,6 +54,12 @@ with tab_nova:
         st.warning("Nenhuma NF no estoque de aparas. Cadastre em 'Recebimento MP' e classifique em 'Classificacao MP'.")
         nfs_selecionadas_op = []
     else:
+        if "tipo_material" in df_aparas_disp.columns:
+            df_aparas_disp = df_aparas_disp[
+                (df_aparas_disp["tipo_material"].astype(str) == "Proprio")
+                | (df_aparas_disp["tipo_material"].isna())
+                | (df_aparas_disp["tipo_material"].astype(str) == "")
+            ]
         df_disponiveis = df_aparas_disp[df_aparas_disp["status"].astype(str) == "disponivel"].copy()
 
         if df_disponiveis.empty:

@@ -10,7 +10,8 @@ from utils.database import read_sheet
 from utils.formatters import formatar_peso, formatar_data
 
 st.header("Inventario Geral")
-st.caption("Visao consolidada de aparas (materia-prima) e grao (produto acabado).")
+st.caption("Visao consolidada de aparas (materia-prima) e grao (produto acabado) PROPRIOS.")
+st.caption("Materiais de Servico (terceiros) NAO entram aqui - veja na aba 'Controle Servico'.")
 
 try:
     df_aparas = read_sheet("aparas_estoque")
@@ -36,6 +37,14 @@ aparas_em_uso = 0.0
 qtd_aguardando = 0
 qtd_disponivel = 0
 qtd_em_uso = 0
+
+if not df_aparas.empty:
+    if "tipo_material" in df_aparas.columns:
+        df_aparas = df_aparas[
+            (df_aparas["tipo_material"].astype(str) == "Proprio")
+            | (df_aparas["tipo_material"].isna())
+            | (df_aparas["tipo_material"].astype(str) == "")
+        ].copy()
 
 if not df_aparas.empty:
     df_aparas["peso_kg"] = pd.to_numeric(df_aparas["peso_kg"], errors="coerce").fillna(0)
@@ -81,6 +90,8 @@ qtd_grao_analise = 0
 qtd_grao_disp = 0
 
 if not df_ext.empty:
+    if "tipo" in df_ext.columns:
+        df_ext = df_ext[df_ext["tipo"].astype(str) != "02"].copy()
     df_ext["peso_kg"] = pd.to_numeric(df_ext["peso_kg"], errors="coerce").fillna(0)
     df_grao_analise = df_ext[df_ext["status"] == "em_analise"]
     df_grao_disp = df_ext[df_ext["status"] == "disponivel"]

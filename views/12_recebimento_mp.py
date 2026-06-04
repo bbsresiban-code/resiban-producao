@@ -48,14 +48,23 @@ with tab_novo:
     with col_n2:
         fornecedor = st.text_input("Fornecedor *", key="rec_fornecedor")
 
-    col_t1, col_t2, col_t3 = st.columns(3)
-    with col_t1:
+    col_m1, col_m2 = st.columns(2)
+    with col_m1:
+        tipo_material = st.selectbox(
+            "Origem do Material *",
+            options=["Proprio", "Servico"],
+            key="rec_tipo_material",
+            help="Proprio = entra no inventario. Servico = controle separado (terceiros).",
+        )
+    with col_m2:
         tipo_fardo = st.selectbox(
             "Tipo de Fardo *",
             options=["Fardinho", "Fardao"],
             key="rec_tipo_fardo",
         )
-    with col_t2:
+
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
         quantidade = st.number_input(
             "Quantidade *",
             min_value=1,
@@ -63,7 +72,7 @@ with tab_novo:
             value=None,
             key="rec_quantidade",
         )
-    with col_t3:
+    with col_t2:
         peso_kg = st.number_input(
             "Peso (kg) *",
             min_value=0.0,
@@ -105,6 +114,7 @@ with tab_novo:
                 dados = {
                     "numero_nf": numero_nf.strip(),
                     "fornecedor": fornecedor.strip(),
+                    "tipo_material": tipo_material,
                     "tipo_fardo": tipo_fardo,
                     "quantidade": int(quantidade or 0),
                     "peso_kg": float(peso_kg or 0),

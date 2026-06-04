@@ -33,6 +33,16 @@ if df_aparas.empty:
     st.info("Nenhuma NF de apara registrada ainda.")
     st.stop()
 
+if "tipo_material" in df_aparas.columns:
+    df_aparas = df_aparas[
+        (df_aparas["tipo_material"].astype(str) == "Proprio")
+        | (df_aparas["tipo_material"].isna())
+        | (df_aparas["tipo_material"].astype(str) == "")
+    ].copy()
+    if df_aparas.empty:
+        st.info("Nenhuma NF de apara Proprio registrada (servico esta em Controle Servico).")
+        st.stop()
+
 # Normalizar colunas
 colunas_esperadas = [
     "id", "numero_nf", "fornecedor", "tipo_fardo", "quantidade",
