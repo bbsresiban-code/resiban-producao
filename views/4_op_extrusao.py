@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date, datetime
 
-from utils.database import read_sheet, append_row, update_rows, read_sheet_no_cache, proximo_sequencial
+from utils.database import read_sheet, append_row, update_rows, update_row_multi, read_sheet_no_cache, proximo_sequencial
 from utils.formatters import EXTRUSORAS, formatar_peso, formatar_data, formatar_percentual
 
 try:
@@ -15,11 +15,11 @@ except ImportError:
 
 st.title("OP Extrusao")
 
-tab_nova, tab_consultar, tab_fechar = st.tabs(["Nova OP", "Consultar OPs", "Fechar OP"])
+tab_nova, tab_editar, tab_consultar, tab_fechar = st.tabs(["Nova OP", "Editar OP", "Consultar OPs", "Fechar OP"])
 
-# ---------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Tab: Nova OP
-# ---------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 with tab_nova:
     st.subheader("Criar Nova Ordem de Producao - Extrusao")
 
@@ -190,9 +190,138 @@ with tab_nova:
             except Exception as exc:
                 st.error(f"Erro ao salvar OP: {exc}")
 
-# ---------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# Tab: Editar OP
+# ------------------------------------------------------------------------------
+with tab_editar:
+    st.subheader("Editar Ordem de Producao - Extrusao (em aberto)")
+
+    try:
+        df_ops_edit = read_sheet_no_cache("op_extrusao")
+    except Exception:
+        df_ops_edit = pd.DataFrame()
+
+    if df_ops_edit.empty or "status" not in df_ops_edit.columns:
+        st.info("Nenhuma OP cadastrada.")
+    else:
+        ops_abertas_edit = df_ops_edit[df_ops_edit["status"].astype(str).str.lower() == "aberta"]
+        if ops_abertas_edit.empty:
+            st.info("Nenhuma OP aberta para editar.")
+        else:
+            opcoes_edit = ops_abertas_edit.apply(
+                lambda r: f"{r['numero_op']} - {r.get('cliente', '')} ({formatar_data(r['data'])})",
+                axis=1,
+            ).tolist()
+            op_edit_label = st.selectbox("Selecione a OP", opcoes_edit, key="ope_edit_sel")
+
+            if op_edit_label:
+                idx_edit = opcoes_edit.index(op_edit_label)
+                op_edit = ops_abertas_edit.iloc[idx_edit]
+                op_edit_num = str(op_edit["numero_op"])
+                volume_atual = float(op_edit.get("volume_ton", 0) or 0)
+
+                st.markdown(
+                    f"**OP:** {op_edit_num} | **Origem:** {op_edit.get('origem', '-')} | "
+                    f"**Volume:** {volume_atual:.2f} ton"
+                )
+                st.caption(
+                    "O volume vem da OPL de origem (Proprio) ou das aparas de servico "
+                    "e nao e alterado aqui."
+                )
+
+                st.divider()
+
+                maquina_atual = op_edit.get("maquina", EXTRUSORAS[0] if len(EXTRUSORAS) else "")
+                try:
+                    idx_maq = list(EXTRUSORAS).index(maquina_atual)
+                except ValueError:
+                    idx_maq = 0
+
+                try:
+                    data_atual = pd.to_datetime(op_edit.get("data")).date()
+                except Exception:
+                    data_atual = date.today()
+
+                with st.form("form_editar_ope", clear_on_submit=False):
+                    col_e1, col_e2 = st.columns(2)
+                    with col_e1:
+                        edit_data = st.date_input("Data", value=data_atual, key="ope_edit_data")
+                        edit_resp = st.text_input(
+                            "Responsavel",
+                            value=str(op_edit.get("responsavel", "") or ""),
+                            key="ope_edit_resp",
+                        )
+                        edit_cliente = st.text_input(
+                            "Cliente",
+                            value=str(op_edit.get("cliente", "") or ""),
+                            key="ope_edit_cliente",
+                        )
+                    with col_e2:
+                        edit_produto = st.text_input(
+                            "Produto",
+                            value=str(op_edit.get("produto", "") or ""),
+                            key="ope_edit_prod",
+                        )
+                        edit_maquina = st.selectbox(
+                            "Maquina",
+                            options=EXTRUSORAS,
+                            index=idx_maq,
+                            format_func=lambda x: f"Extrusora {x}",
+                            key="ope_edit_maq",
+                        )
+                        edit_aditivo = st.number_input(
+                            "Aditivo (%)",
+                            min_value=0.0,
+                            max_value=100.0,
+                            step=0.01,
+                            format="%.2f",
+                            value=float(op_edit.get("aditivo_percentual", 0) or 0),
+                            key="ope_edit_aditivo",
+                            help="Percentual de aditivo no material (aceita ate 2 casas decimais)",
+                        )
+
+                    edit_obs = st.text_area(
+                        "Observacao",
+                        value=str(op_edit.get("observacao", "") or ""),
+                        key="ope_edit_obs",
+                    )
+
+                    edit_aditivo_kg = volume_atual * 1000 * ((edit_aditivo or 0) / 100)
+                    edit_perc_reciclado = 100 - (edit_aditivo or 0)
+                    st.caption(
+                        f"Aditivo total recalculado: {edit_aditivo_kg:,.2f} kg | "
+                        f"Conteudo reciclado: {edit_perc_reciclado:.2f}%"
+                    )
+
+                    edit_submit = st.form_submit_button(
+                        "Salvar Alteracoes", type="primary", use_container_width=True
+                    )
+
+                if edit_submit:
+                    if not edit_resp.strip():
+                        st.error("Responsavel e obrigatorio.")
+                    else:
+                        try:
+                            updates = {
+                                "data": edit_data.isoformat(),
+                                "responsavel": edit_resp.strip(),
+                                "cliente": edit_cliente.strip(),
+                                "produto": edit_produto.strip(),
+                                "maquina": edit_maquina,
+                                "aditivo_percentual": float(edit_aditivo or 0),
+                                "aditivo_kg_total": float(edit_aditivo_kg),
+                                "observacao": edit_obs.strip(),
+                            }
+                            update_row_multi("op_extrusao", "numero_op", op_edit_num, updates)
+                            st.toast("OP atualizada com sucesso!")
+                            st.success(f"OP **{op_edit_num}** atualizada com sucesso.")
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"Erro ao atualizar OP: {exc}")
+
+# ------------------------------------------------------------------------------
 # Tab: Consultar OPs
-# ---------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 with tab_consultar:
     st.subheader("Consultar Ordens de Producao - Extrusao")
 
@@ -283,9 +412,9 @@ with tab_consultar:
     else:
         st.info("Nenhuma OP cadastrada.")
 
-# ---------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Tab: Fechar OP
-# ---------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 with tab_fechar:
     st.subheader("Fechar Ordem de Producao - Extrusao")
 
