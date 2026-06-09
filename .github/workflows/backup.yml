@@ -1,0 +1,31 @@
+name: Backup diario Supabase -> Google Sheets
+
+on:
+  schedule:
+    # 06:00 UTC = 03:00 horario de Brasilia (baixa atividade)
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}   # permite rodar manualmente pelo botao "Run workflow"
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install supabase gspread google-auth
+
+      - name: Rodar backup
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          GSHEET_ID: ${{ secrets.GSHEET_ID }}
+          GSHEET_NAME: ${{ secrets.GSHEET_NAME }}
+        run: python scripts/backup_to_sheets.py
