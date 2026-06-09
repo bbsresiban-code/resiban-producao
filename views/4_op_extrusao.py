@@ -494,41 +494,23 @@ with tab_fechar:
 
                 if fechar:
                     try:
-                        sp = __import__("utils.database", fromlist=["get_spreadsheet"]).get_spreadsheet()
-                        ws = sp.worksheet("op_extrusao")
-                        headers = ws.row_values(1)
-                        all_data = ws.get_all_records()
-
-                        for idx, row in enumerate(all_data, start=2):
-                            if str(row.get("numero_op", "")) == str(op_sel):
-                                if "status" in headers:
-                                    ws.update_cell(idx, headers.index("status") + 1, "fechada")
-                                if "producao_final_kg" in headers:
-                                    ws.update_cell(
-                                        idx,
-                                        headers.index("producao_final_kg") + 1,
-                                        float(producao_final_kg or 0),
-                                    )
-                                if "perda_percentual" in headers:
-                                    ws.update_cell(
-                                        idx,
-                                        headers.index("perda_percentual") + 1,
-                                        float(perda_percentual or 0),
-                                    )
-                                if "data_final" in headers:
-                                    ws.update_cell(
-                                        idx,
-                                        headers.index("data_final") + 1,
-                                        date.today().isoformat(),
-                                    )
-                                break
-
-                        st.cache_data.clear()
+                        update_row_multi(
+                            "op_extrusao",
+                            "numero_op",
+                            op_sel,
+                            {
+                                "status": "fechada",
+                                "producao_final_kg": float(producao_final_kg or 0),
+                                "perda_percentual": float(perda_percentual or 0),
+                                "data_final": date.today().isoformat(),
+                            },
+                        )
                         st.success(
                             f"OP {op_sel} fechada com sucesso! "
                             f"Producao: {formatar_peso(float(producao_final_kg or 0))} | "
                             f"Perda: {formatar_percentual(float(perda_percentual or 0))}"
                         )
+                        st.rerun()
                     except Exception as exc:
                         st.error(f"Erro ao fechar OP: {exc}")
     else:
