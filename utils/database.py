@@ -18,8 +18,9 @@ WORKSHEETS = [
 ]
 
 # TTL (segundos) do cache de leitura. Baixo de proposito: e apenas uma rede de
-# seguranca para mudancas feitas direto no banco (fora do app). Mudancas feitas
-# PELO app invalidam o cache na hora via _bump_version (ver abaixo).
+# seguranca para mudancas feitas DIRETO no banco (fora do app). Mudancas feitas
+# PELO app invalidam o cache na hora via _bump_version (ver abaixo), entao o
+# usuario nunca depende do TTL para ver o que ele mesmo acabou de lancar.
 CACHE_TTL = 15
 
 
@@ -33,11 +34,11 @@ def get_client() -> Client:
 # ---------------------------------------------------------------------------
 # Versionamento GLOBAL do cache (compartilhado entre TODAS as sessoes)
 # ---------------------------------------------------------------------------
-# O Streamlit Cloud roda em um unico processo, entao um dict de modulo e visto
-# por todas as sessoes/usuarios. Guardar a versao aqui (e nao no session_state)
-# faz com que, quando QUALQUER usuario grava em uma tabela, o cache daquela
-# tabela seja invalidado para TODOS imediatamente. Assim, uma OPL criada pelo
-# master aparece na hora para o operador lancar producao, etc.
+# O Streamlit Cloud roda em um unico processo, entao este dict de modulo e visto
+# por todas as sessoes/usuarios. Quando QUALQUER usuario grava em uma tabela, a
+# versao dela muda e o cache daquela tabela e invalidado para TODOS na hora.
+# Assim, uma OPL criada pelo master aparece imediatamente para o operador, um
+# fardo lancado e captado na hora para lancar o proximo, etc. -- sem esperar TTL.
 _TABLE_VERSIONS: dict[str, int] = {}
 _VERSIONS_LOCK = threading.Lock()
 
@@ -52,7 +53,7 @@ def _bump_version(table: str):
 
 
 def _query_table(table: str) -> pd.DataFrame:
-    """Consulta direta ao Supabase (sem cache)."""
+    """Consulta direta ao Supabase (sem cache nenhum)."""
     client = get_client()
     response = client.table(table).select("*").execute()
     data = response.data or []
@@ -64,21 +65,39 @@ def _query_table(table: str) -> pd.DataFrame:
 @st.cache_data(ttl=CACHE_TTL)
 def _read_table_cached(table: str, _version: int) -> pd.DataFrame:
     # _version entra na chave do cache: quando _bump_version incrementa, a
-    # proxima leitura tem chave nova -> cache miss -> dados frescos.
+    # proxima leitura tem chave nova -> cache miss -> dados frescos. Enquanto a
+    # versao nao muda, leituras repetidas (ex: digitar num formulario) sao
+    # servidas da memoria, sem ir ao banco -- e o que deixa a tela rapida.
     return _query_table(table)
 
 
 def read_sheet(worksheet_name: str, ttl: int = CACHE_TTL) -> pd.DataFrame:
-    """Leitura com cache curto, invalidado na hora por gravacoes do app."""
+    """Leitura com cache curto, invalidado na hora por gravacoes do app.
+
+    Use esta em quase tudo: e rapida (memoria) e ja fica fresca automaticamente
+    depois de qualquer gravacao feita pelo app, gracas ao versionamento global.
+    """
     version = _get_version(worksheet_name)
     return _read_table_cached(worksheet_name, version)
 
 
 def read_sheet_no_cache(worksheet_name: str) -> pd.DataFrame:
-    """Leitura SEMPRE fresca, direto do Supabase (sem cache nenhum).
+    """Mantida por compatibilidade. Aponta para a leitura com cache+versao.
 
-    Usar em fluxos onde o dado tem que aparecer imediatamente: selecao de OPs
-    abertas, fardos ja lancados, geracao de sequenciais/codigo de lote, etc.
+    Antes esta funcao ia ao banco a CADA rerun, o que somava varias viagens
+    (EUA <-> Supabase Sao Paulo) por clique e deixava as telas lentas. Como o
+    versionamento global ja garante dado fresco logo apos qualquer gravacao do
+    app, ela agora usa o mesmo caminho rapido de read_sheet. Para leitura
+    realmente crua (rara), use read_sheet_fresh.
+    """
+    return read_sheet(worksheet_name)
+
+
+def read_sheet_fresh(worksheet_name: str) -> pd.DataFrame:
+    """Leitura crua, direto do banco, ignorando cache e versao.
+
+    Usar SO onde a exatidao instantanea importa mais que velocidade e a chamada
+    e rara -- ex: gerar sequencial/codigo de lote unico (evitar numero duplicado).
     """
     return _query_table(worksheet_name)
 
@@ -139,9 +158,9 @@ def update_row_multi(worksheet_name: str, match_col: str, match_value,
 
 
 def proximo_sequencial(worksheet_name: str, coluna: str, prefixo: str) -> str:
-    # Leitura fresca: evita gerar numeros duplicados (OPL/OPE/ROM/MIX).
+    # Leitura crua: minimiza risco de gerar numeros duplicados (OPL/OPE/ROM/MIX).
     try:
-        df = read_sheet_no_cache(worksheet_name)
+        df = read_sheet_fresh(worksheet_name)
     except Exception:
         df = pd.DataFrame()
     if df.empty or coluna not in df.columns:

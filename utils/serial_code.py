@@ -1,5 +1,5 @@
 import pandas as pd
-from utils.database import read_sheet_no_cache
+from utils.database import read_sheet_fresh
 
 TIPOS = {
     "01": "Produto Proprio",
@@ -13,7 +13,7 @@ def gerar_codigo_serial(tipo: str, extrusora: str, data_producao) -> tuple[str, 
     mes = data_producao.month
     ano = data_producao.year % 100
 
-    df = read_sheet_no_cache("producao_extrusao")
+    df = read_sheet_fresh("producao_extrusao")
 
     if df.empty:
         proximo_seq = 1
