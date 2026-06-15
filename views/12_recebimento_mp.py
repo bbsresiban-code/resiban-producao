@@ -6,7 +6,10 @@ import pandas as pd
 from datetime import date, timedelta
 
 from utils.database import read_sheet, read_sheet_no_cache, append_row
-from utils.formatters import formatar_data, formatar_peso
+from utils.formatters import (
+    formatar_data, formatar_peso, tipo_fardo_label, fardos_breakdown,
+    formatar_fardos,
+)
 
 # ---------------------------------------------------------------------------
 # Usuario logado
@@ -57,30 +60,41 @@ with tab_novo:
             help="Proprio = entra no inventario. Servico = controle separado (terceiros).",
         )
     with col_m2:
-        tipo_fardo = st.selectbox(
-            "Tipo de Fardo *",
-            options=["Fardinho", "Fardao"],
-            key="rec_tipo_fardo",
-        )
-
-    col_t1, col_t2 = st.columns(2)
-    with col_t1:
-        quantidade = st.number_input(
-            "Quantidade *",
-            min_value=1,
-            step=1,
-            value=None,
-            key="rec_quantidade",
-        )
-    with col_t2:
         peso_kg = st.number_input(
-            "Peso (kg) *",
+            "Peso Total (kg) *",
             min_value=0.0,
             step=0.5,
             format="%.1f",
             value=None,
             key="rec_peso_kg",
+            help="Peso total da carga desta NF (fardoes + fardinhos juntos).",
         )
+
+    st.markdown("**Quantidade de fardos** (informe os dois se a carga for mista)")
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        qtd_fardao = st.number_input(
+            "Qtd Fardoes",
+            min_value=0,
+            step=1,
+            value=None,
+            key="rec_qtd_fardao",
+        )
+    with col_t2:
+        qtd_fardinho = st.number_input(
+            "Qtd Fardinhos",
+            min_value=0,
+            step=1,
+            value=None,
+            key="rec_qtd_fardinho",
+        )
+
+    qtd_fardao_v = int(qtd_fardao or 0)
+    qtd_fardinho_v = int(qtd_fardinho or 0)
+    quantidade = qtd_fardao_v + qtd_fardinho_v
+    tipo_fardo = tipo_fardo_label(qtd_fardao_v, qtd_fardinho_v)
+    if quantidade > 0:
+        st.caption(f"Tipo: **{tipo_fardo}** | Total: **{quantidade}** fardos")
 
     observacao = st.text_input("Observacao", key="rec_observacao")
 
@@ -97,12 +111,10 @@ with tab_novo:
             erros.append("Informe o numero da NF.")
         if not fornecedor.strip():
             erros.append("Informe o fornecedor.")
-        if not tipo_fardo:
-            erros.append("Selecione o tipo de fardo.")
-        if not quantidade or quantidade < 1:
-            erros.append("Quantidade deve ser maior que zero.")
+        if quantidade < 1:
+            erros.append("Informe a quantidade de fardoes e/ou fardinhos (ao menos um).")
         if not peso_kg or peso_kg <= 0:
-            erros.append("Peso deve ser maior que zero.")
+            erros.append("Peso total deve ser maior que zero.")
         if not registrado_por.strip():
             erros.append("Informe o nome do responsavel pelo registro.")
 
@@ -116,6 +128,8 @@ with tab_novo:
                     "fornecedor": fornecedor.strip(),
                     "tipo_material": tipo_material,
                     "tipo_fardo": tipo_fardo,
+                    "qtd_fardao": qtd_fardao_v,
+                    "qtd_fardinho": qtd_fardinho_v,
                     "quantidade": int(quantidade or 0),
                     "peso_kg": float(peso_kg or 0),
                     "data_recebimento": data_recebimento.isoformat(),
@@ -134,7 +148,8 @@ with tab_novo:
                     f"NF **{numero_nf.strip()}** registrada com sucesso!  \n"
                     f"**Fornecedor:** {fornecedor.strip()}  \n"
                     f"**Tipo de Fardo:** {tipo_fardo}  \n"
-                    f"**Quantidade:** {int(quantidade or 0)} fardos  \n"
+                    f"**Fardos:** {formatar_fardos(qtd_fardao_v, qtd_fardinho_v)} "
+                    f"(total {int(quantidade or 0)})  \n"
                     f"**Peso:** {formatar_peso(float(peso_kg or 0))}  \n"
                     f"**Status:** aguardando_classificacao"
                 )
@@ -220,9 +235,17 @@ with tab_historico:
         else:
             df_filtrado = df_filtrado.sort_values("data_dt", ascending=False)
 
+            df_filtrado["qtd_fardao"] = df_filtrado.apply(
+                lambda r: fardos_breakdown(r)[0], axis=1
+            )
+            df_filtrado["qtd_fardinho"] = df_filtrado.apply(
+                lambda r: fardos_breakdown(r)[1], axis=1
+            )
+
             colunas_exibir = [
                 c for c in [
-                    "numero_nf", "fornecedor", "tipo_fardo", "quantidade",
+                    "numero_nf", "fornecedor", "tipo_fardo",
+                    "qtd_fardao", "qtd_fardinho", "quantidade",
                     "peso_kg", "data_recebimento", "qualidade", "status",
                     "opl_em_uso",
                 ] if c in df_filtrado.columns
@@ -243,8 +266,14 @@ with tab_historico:
                     "numero_nf": st.column_config.TextColumn("NF"),
                     "fornecedor": st.column_config.TextColumn("Fornecedor"),
                     "tipo_fardo": st.column_config.TextColumn("Tipo Fardo"),
+                    "qtd_fardao": st.column_config.NumberColumn(
+                        "Fardoes", format="%d"
+                    ),
+                    "qtd_fardinho": st.column_config.NumberColumn(
+                        "Fardinhos", format="%d"
+                    ),
                     "quantidade": st.column_config.NumberColumn(
-                        "Qtd", format="%d"
+                        "Qtd Total", format="%d"
                     ),
                     "peso_kg": st.column_config.NumberColumn(
                         "Peso (kg)", format="%.1f"

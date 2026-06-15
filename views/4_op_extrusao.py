@@ -224,10 +224,15 @@ with tab_editar:
                     f"**OP:** {op_edit_num} | **Origem:** {op_edit.get('origem', '-')} | "
                     f"**Volume:** {volume_atual:.2f} ton"
                 )
-                st.caption(
-                    "O volume vem da OPL de origem (Proprio) ou das aparas de servico "
-                    "e nao e alterado aqui."
-                )
+                if str(op_edit.get("origem", "")).strip().lower() == "servico":
+                    st.caption(
+                        "O volume vem das aparas de servico. Para troca-las, use a "
+                        "secao 'Aparas de Servico vinculadas' abaixo."
+                    )
+                else:
+                    st.caption(
+                        "O volume vem da OPL de origem (Proprio) e nao e alterado aqui."
+                    )
 
                 st.divider()
 
@@ -318,6 +323,144 @@ with tab_editar:
                             st.rerun()
                         except Exception as exc:
                             st.error(f"Erro ao atualizar OP: {exc}")
+
+                # ----------------------------------------------------------
+                # Edicao de aparas (somente OPE de Servico aberta)
+                # ----------------------------------------------------------
+                if str(op_edit.get("origem", "")).strip().lower() == "servico":
+                    st.divider()
+                    st.markdown("#### Aparas de Servico vinculadas")
+                    st.caption(
+                        "Adicione ou remova aparas desta OPE de servico. O volume "
+                        "e o aditivo total sao recalculados automaticamente."
+                    )
+
+                    try:
+                        df_aparas_all = read_sheet_no_cache("aparas_estoque")
+                    except Exception:
+                        df_aparas_all = pd.DataFrame()
+
+                    cols_ok = (
+                        not df_aparas_all.empty
+                        and "tipo_material" in df_aparas_all.columns
+                        and "opl_em_uso" in df_aparas_all.columns
+                        and "status" in df_aparas_all.columns
+                    )
+
+                    if not cols_ok:
+                        st.info("Nenhuma apara cadastrada (ou colunas ausentes).")
+                    else:
+                        df_aparas_all["peso_kg"] = pd.to_numeric(
+                            df_aparas_all["peso_kg"], errors="coerce"
+                        ).fillna(0)
+
+                        vinc = df_aparas_all[
+                            (df_aparas_all["tipo_material"].astype(str) == "Servico")
+                            & (df_aparas_all["opl_em_uso"].astype(str) == op_edit_num)
+                        ].copy()
+                        disp = df_aparas_all[
+                            (df_aparas_all["tipo_material"].astype(str) == "Servico")
+                            & (df_aparas_all["status"].astype(str) == "disponivel")
+                        ].copy()
+
+                        cols_apara = [
+                            "numero_nf", "fornecedor", "qualidade",
+                            "tipo_fardo", "quantidade", "peso_kg",
+                        ]
+                        col_cfg_base = {
+                            "numero_nf": "NF", "fornecedor": "Fornecedor",
+                            "qualidade": "Qual.", "tipo_fardo": "Tipo",
+                            "quantidade": "Qtd", "peso_kg": "Peso (kg)",
+                        }
+
+                        st.markdown("**Vinculadas atualmente** (marque para remover)")
+                        remover_ids = []
+                        if vinc.empty:
+                            st.caption("Nenhuma apara vinculada a esta OPE.")
+                        else:
+                            vinc_view = vinc[cols_apara].copy()
+                            vinc_view.insert(0, "remover", False)
+                            edited_vinc = st.data_editor(
+                                vinc_view, use_container_width=True, hide_index=True,
+                                disabled=cols_apara,
+                                column_config={
+                                    "remover": st.column_config.CheckboxColumn("Remover"),
+                                    **col_cfg_base,
+                                },
+                                key=f"ope_edit_vinc_{op_edit_num}",
+                            )
+                            for _, r in edited_vinc[edited_vinc["remover"] == True].iterrows():
+                                orig = vinc[vinc["numero_nf"].astype(str) == str(r["numero_nf"])].iloc[0]
+                                remover_ids.append(str(orig["id"]))
+
+                        st.markdown("**Disponiveis para adicionar** (marque para adicionar)")
+                        adicionar_ids = []
+                        if disp.empty:
+                            st.caption("Nenhuma apara de servico disponivel para adicionar.")
+                        else:
+                            disp_view = disp[cols_apara].copy()
+                            disp_view.insert(0, "adicionar", False)
+                            edited_disp = st.data_editor(
+                                disp_view, use_container_width=True, hide_index=True,
+                                disabled=cols_apara,
+                                column_config={
+                                    "adicionar": st.column_config.CheckboxColumn("Adicionar"),
+                                    **col_cfg_base,
+                                },
+                                key=f"ope_edit_disp_{op_edit_num}",
+                            )
+                            for _, r in edited_disp[edited_disp["adicionar"] == True].iterrows():
+                                orig = disp[disp["numero_nf"].astype(str) == str(r["numero_nf"])].iloc[0]
+                                adicionar_ids.append(str(orig["id"]))
+
+                        ids_atuais = set(vinc["id"].astype(str)) if not vinc.empty else set()
+                        ids_finais = (ids_atuais - set(remover_ids)) | set(adicionar_ids)
+                        peso_final = float(
+                            df_aparas_all[df_aparas_all["id"].astype(str).isin(ids_finais)]["peso_kg"].sum()
+                        )
+                        novo_volume = peso_final / 1000
+                        aditivo_pct_atual = float(op_edit.get("aditivo_percentual", 0) or 0)
+                        novo_aditivo_kg = novo_volume * 1000 * (aditivo_pct_atual / 100)
+
+                        st.info(
+                            f"Volume atual: **{volume_atual:.2f} ton** -> "
+                            f"novo volume: **{novo_volume:.2f} ton** ({peso_final:,.1f} kg)  \n"
+                            f"Aditivo total recalculado: **{novo_aditivo_kg:,.2f} kg** "
+                            f"(mantendo {aditivo_pct_atual:.2f}%)"
+                        )
+
+                        if st.button(
+                            "Salvar aparas da OPE", type="primary",
+                            use_container_width=True,
+                            key=f"ope_edit_salvar_aparas_{op_edit_num}",
+                        ):
+                            if not ids_finais:
+                                st.error("A OPE de servico precisa ter ao menos uma apara vinculada.")
+                            elif not remover_ids and not adicionar_ids:
+                                st.warning("Nenhuma alteracao de aparas selecionada.")
+                            else:
+                                try:
+                                    if remover_ids:
+                                        update_rows("aparas_estoque", "id", remover_ids, "status", "disponivel")
+                                        update_rows("aparas_estoque", "id", remover_ids, "opl_em_uso", "")
+                                    if adicionar_ids:
+                                        update_rows("aparas_estoque", "id", adicionar_ids, "status", "em_uso")
+                                        update_rows("aparas_estoque", "id", adicionar_ids, "opl_em_uso", op_edit_num)
+                                    update_row_multi(
+                                        "op_extrusao", "numero_op", op_edit_num,
+                                        {
+                                            "volume_ton": float(novo_volume),
+                                            "aditivo_kg_total": float(novo_aditivo_kg),
+                                        },
+                                    )
+                                    st.toast("Aparas da OPE atualizadas!")
+                                    st.success(
+                                        f"Aparas da OPE **{op_edit_num}** atualizadas. "
+                                        f"Novo volume: {novo_volume:.2f} ton."
+                                    )
+                                    st.rerun()
+                                except Exception as exc:
+                                    st.error(f"Erro ao atualizar aparas: {exc}")
 
 # ------------------------------------------------------------------------------
 # Tab: Consultar OPs

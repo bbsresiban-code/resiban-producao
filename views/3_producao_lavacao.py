@@ -6,7 +6,10 @@ import pandas as pd
 from datetime import date, datetime, timedelta, time
 
 from utils.database import read_sheet, read_sheet_no_cache, append_row
-from utils.formatters import formatar_data, formatar_peso, TURNOS, TIPOS_PARADA
+from utils.formatters import (
+    formatar_data, formatar_peso, TURNOS, TIPOS_PARADA,
+    fardos_breakdown, tipo_fardo_label, formatar_fardos,
+)
 
 try:
     from utils.pdf_generator import gerar_pdf_producao_lavacao
@@ -57,15 +60,13 @@ def carregar_nfs_da_op(numero_op: str) -> list[dict]:
             return []
         resultado = []
         for _, row in nfs_desta_op.iterrows():
-            tipo = str(row.get("tipo_fardo", "")).strip()
-            if tipo.lower() not in ("fardinho", "fardao"):
-                tipo = "Fardinho"
-            else:
-                tipo = tipo.capitalize()
+            fa, fi = fardos_breakdown(row)
             resultado.append({
                 "nf_apara": str(row.get("nf_apara", "")),
                 "fornecedor": str(row.get("fornecedor", "")),
-                "tipo_fardo": tipo,
+                "tipo_fardo": tipo_fardo_label(fa, fi) or "Fardinho",
+                "qtd_fardao": fa,
+                "qtd_fardinho": fi,
                 "quant_fardos": int(float(row.get("quant_fardos", 0) or 0)),
                 "peso_kg": float(row.get("peso_kg", 0) or 0),
             })
@@ -149,55 +150,73 @@ with tab_lancamento:
             nf_numero = nf_info["nf_apara"]
             nf_fornec = nf_info["fornecedor"]
             nf_tipo = nf_info["tipo_fardo"]
+            nf_fa_plan = int(nf_info.get("qtd_fardao", 0) or 0)
+            nf_fi_plan = int(nf_info.get("qtd_fardinho", 0) or 0)
             nf_qtd_plan = nf_info["quant_fardos"]
             nf_peso_plan = nf_info["peso_kg"]
 
             st.subheader(f"NF {nf_numero} - {nf_fornec} ({nf_tipo})")
 
-            # Calcular ja lancado para esta NF
-            qtd_lancada = 0
+            # Calcular ja lancado para esta NF (por tipo de fardo)
+            fa_lancado = 0
+            fi_lancado = 0
             peso_lancado = 0.0
             if not df_prod_existente.empty:
                 mask_nf = df_prod_existente["nf"].astype(str) == nf_numero
                 if mask_nf.any():
-                    qtd_lancada = int(df_prod_existente.loc[mask_nf, "quantidade"].sum())
-                    peso_lancado = float(df_prod_existente.loc[mask_nf, "peso_kg"].sum())
+                    sub_nf = df_prod_existente.loc[mask_nf]
+                    for _, pr in sub_nf.iterrows():
+                        pfa, pfi = fardos_breakdown(pr)
+                        fa_lancado += pfa
+                        fi_lancado += pfi
+                    peso_lancado = float(sub_nf["peso_kg"].sum())
 
-            qtd_restante = max(0, nf_qtd_plan - qtd_lancada)
+            fa_rest = max(0, nf_fa_plan - fa_lancado)
+            fi_rest = max(0, nf_fi_plan - fi_lancado)
+            qtd_restante = fa_rest + fi_rest
             peso_restante = max(0.0, nf_peso_plan - peso_lancado)
 
             col_m1, col_m2, col_m3 = st.columns(3)
             with col_m1:
                 st.metric(
                     "Planejado",
-                    f"{nf_qtd_plan} un / {formatar_peso(nf_peso_plan)}",
+                    f"{formatar_fardos(nf_fa_plan, nf_fi_plan)} / {formatar_peso(nf_peso_plan)}",
                 )
             with col_m2:
                 st.metric(
                     "Ja Lancado",
-                    f"{qtd_lancada} un / {formatar_peso(peso_lancado)}",
+                    f"{formatar_fardos(fa_lancado, fi_lancado)} / {formatar_peso(peso_lancado)}",
                 )
             with col_m3:
                 st.metric(
                     "Restante",
-                    f"{qtd_restante} un / {formatar_peso(peso_restante)}",
+                    f"{formatar_fardos(fa_rest, fi_rest)} / {formatar_peso(peso_restante)}",
                 )
 
             if qtd_restante > 0 and peso_restante > 0:
                 with st.form(
                     f"form_nf_{idx_nf}_{nf_numero}", clear_on_submit=True
                 ):
-                    col_f1, col_f2 = st.columns(2)
+                    col_f1, col_f2, col_f3 = st.columns(3)
                     with col_f1:
-                        quantidade = st.number_input(
-                            "Quantidade",
-                            min_value=0,
-                            max_value=qtd_restante,
-                            step=1,
-                            key=f"qtd_nf_{idx_nf}",
-                            value=None,
-                        )
+                        if nf_fa_plan > 0:
+                            reg_fa_in = st.number_input(
+                                "Qtd Fardoes", min_value=0, max_value=fa_rest,
+                                step=1, key=f"fa_nf_{idx_nf}", value=None,
+                            )
+                        else:
+                            reg_fa_in = None
+                            st.caption("Sem fardoes nesta NF")
                     with col_f2:
+                        if nf_fi_plan > 0:
+                            reg_fi_in = st.number_input(
+                                "Qtd Fardinhos", min_value=0, max_value=fi_rest,
+                                step=1, key=f"fi_nf_{idx_nf}", value=None,
+                            )
+                        else:
+                            reg_fi_in = None
+                            st.caption("Sem fardinhos nesta NF")
+                    with col_f3:
                         peso_kg = st.number_input(
                             "Peso (kg)",
                             min_value=0.0,
@@ -208,15 +227,18 @@ with tab_lancamento:
                             value=None,
                         )
                     submit_nf = st.form_submit_button(
-                        f"Registrar {nf_tipo}",
+                        "Registrar producao",
                         type="primary",
                         use_container_width=True,
                     )
 
                 if submit_nf:
+                    reg_fa = int(reg_fa_in or 0)
+                    reg_fi = int(reg_fi_in or 0)
+                    qtd_total = reg_fa + reg_fi
                     erros = []
-                    if not quantidade or quantidade <= 0:
-                        erros.append("Quantidade deve ser maior que zero.")
+                    if qtd_total <= 0:
+                        erros.append("Informe a quantidade de fardoes e/ou fardinhos.")
                     if not peso_kg or peso_kg <= 0:
                         erros.append("Peso deve ser maior que zero.")
                     if erros:
@@ -224,13 +246,16 @@ with tab_lancamento:
                             st.error(e)
                     else:
                         try:
+                            tipo_reg = tipo_fardo_label(reg_fa, reg_fi).lower() or nf_tipo.lower()
                             dados = {
                                 "data": data_prod.isoformat(),
                                 "turno": turno,
                                 "numero_op": numero_op,
-                                "tipo_fardo": nf_tipo.lower(),
+                                "tipo_fardo": tipo_reg,
+                                "qtd_fardao": reg_fa,
+                                "qtd_fardinho": reg_fi,
                                 "nf": nf_numero,
-                                "quantidade": int(quantidade or 0),
+                                "quantidade": qtd_total,
                                 "peso_kg": float(peso_kg or 0),
                                 "perda_lixo_kg": 0,
                                 "perda_papelao_kg": 0,
@@ -239,10 +264,11 @@ with tab_lancamento:
                                 "registrado_por": "",
                             }
                             append_row("producao_lavacao", dados)
-                            st.toast(f"{nf_tipo} registrado com sucesso!")
+                            st.toast("Producao registrada com sucesso!")
                             st.success(
-                                f"{nf_tipo} NF **{nf_numero}** - "
-                                f"{int(quantidade or 0)} un / {formatar_peso(float(peso_kg or 0))} registrado."
+                                f"NF **{nf_numero}** - "
+                                f"{formatar_fardos(reg_fa, reg_fi)} / "
+                                f"{formatar_peso(float(peso_kg or 0))} registrado."
                             )
                             st.rerun()
                         except Exception as exc:
@@ -386,9 +412,7 @@ with tab_lancamento:
                     ).fillna(0)
 
             df_fardos = df_resumo[
-                df_resumo["tipo_fardo"].astype(str).str.lower().isin(
-                    ["fardinho", "fardao"]
-                )
+                df_resumo["tipo_fardo"].astype(str).str.lower() != "perdas"
             ]
             df_perdas = df_resumo[
                 df_resumo["tipo_fardo"].astype(str).str.lower() == "perdas"
@@ -397,8 +421,13 @@ with tab_lancamento:
             total_fardos_qtd = int(df_fardos["quantidade"].sum()) if not df_fardos.empty else 0
             total_fardos_peso = float(df_fardos["peso_kg"].sum()) if not df_fardos.empty else 0.0
             total_perdas_peso = float(df_perdas["perda_total_kg"].sum()) if not df_perdas.empty else 0.0
-            n_fardinhos = len(df_fardos[df_fardos["tipo_fardo"].astype(str).str.lower() == "fardinho"]) if not df_fardos.empty else 0
-            n_fardoes = len(df_fardos[df_fardos["tipo_fardo"].astype(str).str.lower() == "fardao"]) if not df_fardos.empty else 0
+            n_fardinhos = 0
+            n_fardoes = 0
+            if not df_fardos.empty:
+                for _, pr in df_fardos.iterrows():
+                    pfa, pfi = fardos_breakdown(pr)
+                    n_fardoes += pfa
+                    n_fardinhos += pfi
 
             col_r1, col_r2, col_r3, col_r4 = st.columns(4)
             with col_r1:
@@ -598,12 +627,9 @@ with tab_historico:
                         df_filtrado[col_num], errors="coerce"
                     ).fillna(0)
 
-            # Separar fardos e perdas
+            # Separar fardos e perdas (Misto conta como producao)
             df_fardos_hist = df_filtrado[
-                df_filtrado["tipo_fardo"]
-                .astype(str)
-                .str.lower()
-                .isin(["fardinho", "fardao"])
+                df_filtrado["tipo_fardo"].astype(str).str.lower() != "perdas"
             ]
             df_perdas_hist = df_filtrado[
                 df_filtrado["tipo_fardo"].astype(str).str.lower() == "perdas"
@@ -612,18 +638,13 @@ with tab_historico:
             total_registros = len(df_fardos_hist)
             total_peso = float(df_fardos_hist["peso_kg"].sum()) if not df_fardos_hist.empty else 0.0
             total_perdas = float(df_perdas_hist["perda_total_kg"].sum()) if not df_perdas_hist.empty else 0.0
-            total_fardinhos = len(
-                df_fardos_hist[
-                    df_fardos_hist["tipo_fardo"].astype(str).str.lower()
-                    == "fardinho"
-                ]
-            )
-            total_fardoes = len(
-                df_fardos_hist[
-                    df_fardos_hist["tipo_fardo"].astype(str).str.lower()
-                    == "fardao"
-                ]
-            )
+            total_fardinhos = 0
+            total_fardoes = 0
+            if not df_fardos_hist.empty:
+                for _, pr in df_fardos_hist.iterrows():
+                    pfa, pfi = fardos_breakdown(pr)
+                    total_fardoes += pfa
+                    total_fardinhos += pfi
 
             # Metricas resumo
             col_m1, col_m2, col_m3, col_m4 = st.columns(4)
@@ -642,9 +663,13 @@ with tab_historico:
             st.divider()
 
             # Tabela de dados
+            df_filtrado["qtd_fardao"] = df_filtrado.apply(lambda r: fardos_breakdown(r)[0], axis=1)
+            df_filtrado["qtd_fardinho"] = df_filtrado.apply(lambda r: fardos_breakdown(r)[1], axis=1)
+
             colunas_exibir = [
                 "data", "turno", "numero_op", "tipo_fardo", "nf",
-                "quantidade", "peso_kg", "perda_lixo_kg", "perda_papelao_kg",
+                "qtd_fardao", "qtd_fardinho", "quantidade", "peso_kg",
+                "perda_lixo_kg", "perda_papelao_kg",
                 "perda_plastico_colorido_kg", "perda_total_kg",
                 "registrado_por",
             ]

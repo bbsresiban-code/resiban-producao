@@ -22,6 +22,67 @@ def formatar_percentual(valor: float) -> str:
 
 TURNOS = ["A", "B", "C"]
 
+TIPOS_FARDO = ["Fardinho", "Fardao"]
+
+
+def _fardo_to_int(v) -> int:
+    """Converte valor (str/num/None/NaN) para int de forma segura."""
+    try:
+        if v is None:
+            return 0
+        s = str(v).strip()
+        if s == "" or s.lower() == "nan":
+            return 0
+        return int(float(s))
+    except (ValueError, TypeError):
+        return 0
+
+
+def fardos_breakdown(row) -> tuple[int, int]:
+    """Retorna (qtd_fardao, qtd_fardinho) de uma linha (dict ou Series).
+
+    Retrocompativel: se as colunas qtd_fardao/qtd_fardinho nao existirem ou
+    estiverem zeradas (linhas antigas), deriva do tipo_fardo + quantidade.
+    """
+    get = row.get if hasattr(row, "get") else (lambda k, d=None: row[k] if k in row else d)
+    fa = _fardo_to_int(get("qtd_fardao"))
+    fi = _fardo_to_int(get("qtd_fardinho"))
+    if fa == 0 and fi == 0:
+        total = _fardo_to_int(get("quantidade"))
+        if total == 0:
+            total = _fardo_to_int(get("quant_fardos"))
+        tipo = str(get("tipo_fardo", "") or "").strip().lower()
+        if tipo == "fardao":
+            fa = total
+        elif tipo == "fardinho":
+            fi = total
+    return fa, fi
+
+
+def tipo_fardo_label(qtd_fardao, qtd_fardinho) -> str:
+    """Rotulo do tipo de fardo a partir das quantidades: Fardao/Fardinho/Misto."""
+    fa = _fardo_to_int(qtd_fardao)
+    fi = _fardo_to_int(qtd_fardinho)
+    if fa > 0 and fi > 0:
+        return "Misto"
+    if fa > 0:
+        return "Fardao"
+    if fi > 0:
+        return "Fardinho"
+    return ""
+
+
+def formatar_fardos(qtd_fardao, qtd_fardinho) -> str:
+    """Texto curto do breakdown, ex: '10 fardoes + 25 fardinhos'."""
+    fa = _fardo_to_int(qtd_fardao)
+    fi = _fardo_to_int(qtd_fardinho)
+    partes = []
+    if fa > 0:
+        partes.append(f"{fa} " + ("fardoes" if fa != 1 else "fardao"))
+    if fi > 0:
+        partes.append(f"{fi} " + ("fardinhos" if fi != 1 else "fardinho"))
+    return " + ".join(partes) if partes else "0"
+
 TIPOS_PRODUTO = {
     "01": "Produto Proprio",
     "02": "Servico/Terceiros",

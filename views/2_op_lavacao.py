@@ -6,7 +6,10 @@ import pandas as pd
 from datetime import date, timedelta
 
 from utils.database import read_sheet, read_sheet_no_cache, append_row, update_rows, proximo_sequencial
-from utils.formatters import formatar_data, formatar_peso
+from utils.formatters import (
+    formatar_data, formatar_peso, fardos_breakdown, tipo_fardo_label,
+    formatar_fardos,
+)
 
 try:
     from utils.pdf_generator import gerar_pdf_op_lavacao, gerar_pdf_fechamento_op_lavacao
@@ -76,10 +79,21 @@ with tab_nova:
                     "Filtrar por Tipo de Fardo", options=["Fardinho", "Fardao"], default=["Fardinho", "Fardao"], key="opl_filtro_tipo",
                 )
 
+            df_disponiveis["qtd_fardao"] = df_disponiveis.apply(lambda r: fardos_breakdown(r)[0], axis=1)
+            df_disponiveis["qtd_fardinho"] = df_disponiveis.apply(lambda r: fardos_breakdown(r)[1], axis=1)
+
             if filtro_qual:
                 df_disponiveis = df_disponiveis[df_disponiveis["qualidade"].astype(str).isin(filtro_qual)]
             if filtro_tipo:
-                df_disponiveis = df_disponiveis[df_disponiveis["tipo_fardo"].astype(str).isin(filtro_tipo)]
+                # NF "Misto" aparece se qualquer tipo selecionado estiver presente nela
+                quer_fardao = "Fardao" in filtro_tipo
+                quer_fardinho = "Fardinho" in filtro_tipo
+                mask_tipo = pd.Series(False, index=df_disponiveis.index)
+                if quer_fardao:
+                    mask_tipo = mask_tipo | (df_disponiveis["qtd_fardao"] > 0)
+                if quer_fardinho:
+                    mask_tipo = mask_tipo | (df_disponiveis["qtd_fardinho"] > 0)
+                df_disponiveis = df_disponiveis[mask_tipo]
 
             if df_disponiveis.empty:
                 st.info("Nenhuma NF disponivel com os filtros selecionados.")
@@ -89,21 +103,25 @@ with tab_nova:
                 df_disponiveis["quantidade"] = pd.to_numeric(df_disponiveis["quantidade"], errors="coerce").fillna(0).astype(int)
                 df_disponiveis["selecionar"] = False
                 df_disponiveis_view = df_disponiveis[
-                    ["selecionar", "numero_nf", "fornecedor", "qualidade", "tipo_fardo", "quantidade", "peso_kg", "data_recebimento"]
+                    ["selecionar", "numero_nf", "fornecedor", "qualidade", "tipo_fardo",
+                     "qtd_fardao", "qtd_fardinho", "quantidade", "peso_kg", "data_recebimento"]
                 ].copy()
 
                 edited = st.data_editor(
                     df_disponiveis_view,
                     use_container_width=True,
                     hide_index=True,
-                    disabled=["numero_nf", "fornecedor", "qualidade", "tipo_fardo", "quantidade", "peso_kg", "data_recebimento"],
+                    disabled=["numero_nf", "fornecedor", "qualidade", "tipo_fardo",
+                              "qtd_fardao", "qtd_fardinho", "quantidade", "peso_kg", "data_recebimento"],
                     column_config={
                         "selecionar": st.column_config.CheckboxColumn("Selecionar"),
                         "numero_nf": "NF",
                         "fornecedor": "Fornecedor",
                         "qualidade": "Qual.",
                         "tipo_fardo": "Tipo",
-                        "quantidade": "Qtd",
+                        "qtd_fardao": "Fardoes",
+                        "qtd_fardinho": "Fardinhos",
+                        "quantidade": "Qtd Total",
                         "peso_kg": "Peso (kg)",
                         "data_recebimento": "Recebido",
                     },
@@ -116,11 +134,14 @@ with tab_nova:
                 if not selecionadas.empty:
                     for _, sel_row in selecionadas.iterrows():
                         orig = df_disponiveis[df_disponiveis["numero_nf"].astype(str) == str(sel_row["numero_nf"])].iloc[0]
+                        fa_o, fi_o = fardos_breakdown(orig)
                         nfs_selecionadas_op.append({
                             "aparas_id": str(orig["id"]),
                             "nf_apara": str(orig["numero_nf"]),
                             "fornecedor": str(orig["fornecedor"]),
                             "tipo_fardo": str(orig["tipo_fardo"]),
+                            "qtd_fardao": fa_o,
+                            "qtd_fardinho": fi_o,
                             "quant_fardos": int(orig["quantidade"]),
                             "peso_kg": float(orig["peso_kg"]),
                             "qualidade": str(orig.get("qualidade", "")),
@@ -178,6 +199,8 @@ with tab_nova:
                         "nf_apara": nf["nf_apara"],
                         "fornecedor": nf["fornecedor"],
                         "tipo_fardo": nf["tipo_fardo"],
+                        "qtd_fardao": nf.get("qtd_fardao", 0),
+                        "qtd_fardinho": nf.get("qtd_fardinho", 0),
                         "quant_fardos": nf["quant_fardos"],
                         "peso_kg": nf["peso_kg"],
                         "obs": nf.get("obs", ""),
@@ -249,7 +272,10 @@ with tab_editar:
 
                 if not nfs_edit.empty:
                     st.caption("NFs ja cadastradas:")
-                    cols_show = ["nf_apara", "fornecedor", "tipo_fardo", "quant_fardos", "peso_kg", "obs"]
+                    nfs_edit = nfs_edit.copy()
+                    nfs_edit["qtd_fardao"] = nfs_edit.apply(lambda r: fardos_breakdown(r)[0], axis=1)
+                    nfs_edit["qtd_fardinho"] = nfs_edit.apply(lambda r: fardos_breakdown(r)[1], axis=1)
+                    cols_show = ["nf_apara", "fornecedor", "tipo_fardo", "qtd_fardao", "qtd_fardinho", "quant_fardos", "peso_kg", "obs"]
                     cols_ok = [c for c in cols_show if c in nfs_edit.columns]
                     st.dataframe(nfs_edit[cols_ok], use_container_width=True, hide_index=True)
 
@@ -262,20 +288,23 @@ with tab_editar:
                         edit_nf = st.text_input("NF Apara", key="edit_nf_apara")
                         edit_fornec = st.text_input("Fornecedor", key="edit_fornec")
                     with col_e2:
-                        edit_tipo = st.selectbox("Tipo de Fardo", ["Fardinho", "Fardao"], key="edit_tipo")
-                        edit_qtd = st.number_input("Quantidade de Fardos", min_value=0, step=1, key="edit_qtd", value=None)
+                        edit_qtd_fardao = st.number_input("Qtd Fardoes", min_value=0, step=1, key="edit_qtd_fardao", value=None)
+                        edit_qtd_fardinho = st.number_input("Qtd Fardinhos", min_value=0, step=1, key="edit_qtd_fardinho", value=None)
                     with col_e3:
-                        edit_peso = st.number_input("Peso (kg)", min_value=0.0, step=0.5, format="%.1f", key="edit_peso", value=None)
+                        edit_peso = st.number_input("Peso Total (kg)", min_value=0.0, step=0.5, format="%.1f", key="edit_peso", value=None)
                         edit_obs = st.text_input("Observacao", key="edit_obs")
 
                     edit_submit = st.form_submit_button("Adicionar NF", type="primary", use_container_width=True)
 
                 if edit_submit:
+                    edit_fa = int(edit_qtd_fardao or 0)
+                    edit_fi = int(edit_qtd_fardinho or 0)
+                    edit_qtd_total = edit_fa + edit_fi
                     erros_edit = []
                     if not edit_nf.strip():
                         erros_edit.append("NF Apara e obrigatoria.")
-                    if not edit_qtd or edit_qtd <= 0:
-                        erros_edit.append("Quantidade deve ser maior que zero.")
+                    if edit_qtd_total <= 0:
+                        erros_edit.append("Informe a quantidade de fardoes e/ou fardinhos.")
                     if not edit_peso or edit_peso <= 0:
                         erros_edit.append("Peso deve ser maior que zero.")
 
@@ -288,8 +317,10 @@ with tab_editar:
                                 "op_lavacao_id": str(op_edit_id),
                                 "nf_apara": edit_nf.strip(),
                                 "fornecedor": edit_fornec.strip(),
-                                "tipo_fardo": edit_tipo,
-                                "quant_fardos": int(edit_qtd or 0),
+                                "tipo_fardo": tipo_fardo_label(edit_fa, edit_fi),
+                                "qtd_fardao": edit_fa,
+                                "qtd_fardinho": edit_fi,
+                                "quant_fardos": edit_qtd_total,
                                 "peso_kg": float(edit_peso or 0),
                                 "obs": edit_obs.strip(),
                             }
@@ -632,7 +663,10 @@ with tab_consultar:
                         nfs_desta_op = df_nfs_all[df_nfs_all["op_lavacao_id"] == row["id"]]
                         if not nfs_desta_op.empty:
                             st.caption("Notas Fiscais vinculadas:")
-                            cols_nf = ["nf_apara", "fornecedor", "tipo_fardo", "quant_fardos", "peso_kg", "obs"]
+                            nfs_desta_op = nfs_desta_op.copy()
+                            nfs_desta_op["qtd_fardao"] = nfs_desta_op.apply(lambda r: fardos_breakdown(r)[0], axis=1)
+                            nfs_desta_op["qtd_fardinho"] = nfs_desta_op.apply(lambda r: fardos_breakdown(r)[1], axis=1)
+                            cols_nf = ["nf_apara", "fornecedor", "tipo_fardo", "qtd_fardao", "qtd_fardinho", "quant_fardos", "peso_kg", "obs"]
                             cols_presentes = [c for c in cols_nf if c in nfs_desta_op.columns]
                             st.dataframe(
                                 nfs_desta_op[cols_presentes],

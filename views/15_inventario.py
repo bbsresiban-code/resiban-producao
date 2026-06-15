@@ -7,7 +7,7 @@ from datetime import date
 from io import BytesIO
 
 from utils.database import read_sheet
-from utils.formatters import formatar_peso, formatar_data
+from utils.formatters import formatar_peso, formatar_data, fardos_breakdown
 
 st.header("Inventario Geral")
 st.caption("Visao consolidada de aparas (materia-prima) e grao (produto acabado) PROPRIOS.")
@@ -48,6 +48,8 @@ if not df_aparas.empty:
 
 if not df_aparas.empty:
     df_aparas["peso_kg"] = pd.to_numeric(df_aparas["peso_kg"], errors="coerce").fillna(0)
+    df_aparas["qtd_fardao"] = df_aparas.apply(lambda r: fardos_breakdown(r)[0], axis=1)
+    df_aparas["qtd_fardinho"] = df_aparas.apply(lambda r: fardos_breakdown(r)[1], axis=1)
     aparas_aguardando = float(df_aparas[df_aparas["status"] == "aguardando_classificacao"]["peso_kg"].sum())
     aparas_disponivel = float(df_aparas[df_aparas["status"] == "disponivel"]["peso_kg"].sum())
     aparas_em_uso = float(df_aparas[df_aparas["status"] == "em_uso"]["peso_kg"].sum())
@@ -72,9 +74,11 @@ if not df_aparas.empty:
         st.markdown("**Aparas disponiveis por Qualidade:**")
         por_qual = df_disp_q.groupby("qualidade").agg(
             qtd=("numero_nf", "count"),
+            fardoes=("qtd_fardao", "sum"),
+            fardinhos=("qtd_fardinho", "sum"),
             peso=("peso_kg", "sum"),
         ).reset_index()
-        por_qual.columns = ["Qualidade", "Qtd NFs", "Peso (kg)"]
+        por_qual.columns = ["Qualidade", "Qtd NFs", "Fardoes", "Fardinhos", "Peso (kg)"]
         por_qual["Peso (kg)"] = por_qual["Peso (kg)"].apply(formatar_peso)
         st.dataframe(por_qual, use_container_width=True, hide_index=True)
 
@@ -156,7 +160,8 @@ def gerar_excel_inventario():
 
         if not df_aparas.empty:
             cols_ap = [c for c in ["numero_nf", "fornecedor", "qualidade", "tipo_fardo",
-                                   "quantidade", "peso_kg", "status", "opl_em_uso",
+                                   "qtd_fardao", "qtd_fardinho", "quantidade", "peso_kg",
+                                   "status", "opl_em_uso",
                                    "data_recebimento", "data_classificacao"] if c in df_aparas.columns]
             df_aparas[cols_ap].to_excel(writer, sheet_name="Aparas Detalhado", index=False)
 

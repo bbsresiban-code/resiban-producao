@@ -6,7 +6,7 @@ import pandas as pd
 from datetime import date, timedelta
 
 from utils.database import read_sheet
-from utils.formatters import formatar_data, formatar_peso
+from utils.formatters import formatar_data, formatar_peso, fardos_breakdown
 
 # ---------------------------------------------------------------------------
 # Titulo e botao de atualizacao
@@ -57,6 +57,10 @@ for col in colunas_esperadas:
 # Converter tipos numericos
 df_aparas["peso_kg"] = pd.to_numeric(df_aparas["peso_kg"], errors="coerce").fillna(0)
 df_aparas["quantidade"] = pd.to_numeric(df_aparas["quantidade"], errors="coerce").fillna(0).astype(int)
+
+# Breakdown de fardos (retrocompativel com linhas antigas)
+df_aparas["qtd_fardao"] = df_aparas.apply(lambda r: fardos_breakdown(r)[0], axis=1)
+df_aparas["qtd_fardinho"] = df_aparas.apply(lambda r: fardos_breakdown(r)[1], axis=1)
 
 # Normalizar status (vazio = aguardando_classificacao)
 df_aparas["status"] = df_aparas["status"].fillna("").astype(str).str.strip()
@@ -115,6 +119,8 @@ else:
             "numero_nf",
             "fornecedor",
             "tipo_fardo",
+            "qtd_fardao",
+            "qtd_fardinho",
             "quantidade",
             "peso_kg",
             "data_recebimento",
@@ -131,7 +137,9 @@ else:
             "numero_nf": "NF",
             "fornecedor": "Fornecedor",
             "tipo_fardo": "Tipo de Fardo",
-            "quantidade": "Quantidade",
+            "qtd_fardao": "Fardoes",
+            "qtd_fardinho": "Fardinhos",
+            "quantidade": "Qtd Total",
             "peso_kg": "Peso",
             "data_recebimento": "Data Recebimento",
             "registrado_por": "Registrado por",
@@ -196,6 +204,8 @@ else:
                 "fornecedor",
                 "qualidade",
                 "tipo_fardo",
+                "qtd_fardao",
+                "qtd_fardinho",
                 "quantidade",
                 "peso_kg",
                 "data_recebimento",
@@ -214,7 +224,9 @@ else:
                 "fornecedor": "Fornecedor",
                 "qualidade": "Qualidade",
                 "tipo_fardo": "Tipo de Fardo",
-                "quantidade": "Quantidade",
+                "qtd_fardao": "Fardoes",
+                "qtd_fardinho": "Fardinhos",
+                "quantidade": "Qtd Total",
                 "peso_kg": "Peso",
                 "data_recebimento": "Data Recebimento",
                 "data_classificacao": "Data Classificacao",
@@ -275,6 +287,8 @@ else:
             "fornecedor",
             "qualidade",
             "tipo_fardo",
+            "qtd_fardao",
+            "qtd_fardinho",
             "quantidade",
             "peso_kg",
             "opl_em_uso",
@@ -290,7 +304,9 @@ else:
             "fornecedor": "Fornecedor",
             "qualidade": "Qualidade",
             "tipo_fardo": "Tipo de Fardo",
-            "quantidade": "Quantidade",
+            "qtd_fardao": "Fardoes",
+            "qtd_fardinho": "Fardinhos",
+            "quantidade": "Qtd Total",
             "peso_kg": "Peso",
             "opl_em_uso": "OPL em uso",
         }
@@ -309,6 +325,8 @@ else:
         df_em_uso.groupby("opl_em_uso", dropna=False)
         .agg(
             nfs=("numero_nf", "count"),
+            fardoes=("qtd_fardao", "sum"),
+            fardinhos=("qtd_fardinho", "sum"),
             quantidade_fardos=("quantidade", "sum"),
             peso_total_kg=("peso_kg", "sum"),
         )
@@ -317,7 +335,9 @@ else:
             columns={
                 "opl_em_uso": "OPL",
                 "nfs": "NFs",
-                "quantidade_fardos": "Fardos",
+                "fardoes": "Fardoes",
+                "fardinhos": "Fardinhos",
+                "quantidade_fardos": "Fardos (total)",
                 "peso_total_kg": "Peso Total",
             }
         )

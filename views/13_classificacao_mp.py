@@ -6,7 +6,7 @@ import pandas as pd
 from datetime import date, timedelta
 
 from utils.database import read_sheet, read_sheet_no_cache, update_row_multi
-from utils.formatters import formatar_data, formatar_peso
+from utils.formatters import formatar_data, formatar_peso, fardos_breakdown, formatar_fardos
 
 # ---------------------------------------------------------------------------
 # Titulo
@@ -46,11 +46,15 @@ with tab_classificar:
             ).fillna(0)
 
             # Tabela resumo
+            df_aguardando["qtd_fardao"] = df_aguardando.apply(lambda r: fardos_breakdown(r)[0], axis=1)
+            df_aguardando["qtd_fardinho"] = df_aguardando.apply(lambda r: fardos_breakdown(r)[1], axis=1)
             df_tabela = df_aguardando[
                 [
                     "numero_nf",
                     "fornecedor",
                     "tipo_fardo",
+                    "qtd_fardao",
+                    "qtd_fardinho",
                     "quantidade",
                     "peso_kg",
                     "data_recebimento",
@@ -98,9 +102,11 @@ with tab_classificar:
                     st.metric("Fornecedor", str(nf_row.get("fornecedor", "")))
                 with col_b:
                     st.metric("Tipo Fardo", str(nf_row.get("tipo_fardo", "")))
+                    _fa, _fi = fardos_breakdown(nf_row)
                     st.metric(
-                        "Quantidade",
-                        f"{int(float(nf_row.get('quantidade', 0) or 0))}",
+                        "Fardos",
+                        formatar_fardos(_fa, _fi),
+                        help=f"Total: {int(float(nf_row.get('quantidade', 0) or 0))} fardos",
                     )
                 with col_c:
                     st.metric(
@@ -304,11 +310,15 @@ with tab_historico:
                     "data_classificacao_dt", ascending=False
                 )
 
+                df_view["qtd_fardao"] = df_view.apply(lambda r: fardos_breakdown(r)[0], axis=1)
+                df_view["qtd_fardinho"] = df_view.apply(lambda r: fardos_breakdown(r)[1], axis=1)
                 colunas_exibir = [
                     "data_classificacao",
                     "numero_nf",
                     "fornecedor",
                     "tipo_fardo",
+                    "qtd_fardao",
+                    "qtd_fardinho",
                     "quantidade",
                     "peso_kg",
                     "qualidade",

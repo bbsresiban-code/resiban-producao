@@ -10,6 +10,8 @@ import os
 from fpdf import FPDF
 from io import BytesIO
 
+from utils.formatters import fardos_breakdown
+
 LOGO_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "logo.png")
 
 
@@ -148,20 +150,22 @@ def gerar_pdf_op_lavacao(op_data: dict, nfs: list[dict]) -> bytes:
 
     _section_title(pdf, "Notas Fiscais de Apara")
 
-    headers = ["NF Apara", "Fornecedor", "Qtd Fardos", "Peso (kg)", "Obs"]
-    col_widths = [35, 40, 25, 30, 50]
+    headers = ["NF Apara", "Fornecedor", "Fardoes", "Fardinhos", "Peso (kg)", "Obs"]
+    col_widths = [32, 38, 20, 22, 28, 40]
     rows = []
     total_peso = 0.0
     total_fardos = 0
     for nf in (nfs or []):
         peso = nf.get("peso_kg", nf.get("peso", 0)) or 0
         fardos = nf.get("quant_fardos", 0) or 0
+        fa, fi = fardos_breakdown(nf)
         total_peso += float(peso)
         total_fardos += int(fardos)
         rows.append([
             str(nf.get("nf_apara", "")),
             str(nf.get("fornecedor", "")),
-            str(fardos),
+            str(fa),
+            str(fi),
             str(peso),
             str(nf.get("obs", "")),
         ])
@@ -333,27 +337,30 @@ def gerar_pdf_producao_lavacao(
 
     registros = registros or []
 
-    # Fardinhos
-    fardinhos = [r for r in registros if str(r.get("tipo_fardo", r.get("tipo", ""))).lower() == "fardinho"]
-    _section_title(pdf, "Fardinhos")
-    headers_f = ["OP", "NF", "Quantidade", "Peso (kg)"]
-    col_widths_f = [40, 45, 40, 55]
-    rows_f = [
-        [str(r.get("numero_op", r.get("op", ""))), str(r.get("nf", "")),
-         str(r.get("quantidade", "")), str(r.get("peso_kg", r.get("peso", "")))]
-        for r in fardinhos
-    ]
+    # Producao por NF (inclui Misto: fardoes + fardinhos na mesma NF)
+    fardos = [r for r in registros if str(r.get("tipo_fardo", r.get("tipo", ""))).lower() != "perdas"]
+    _section_title(pdf, "Producao por NF")
+    headers_f = ["OP", "NF", "Fardoes", "Fardinhos", "Peso (kg)"]
+    col_widths_f = [35, 40, 30, 30, 45]
+    rows_f = []
+    tot_fa = 0
+    tot_fi = 0
+    for r in fardos:
+        fa, fi = fardos_breakdown(r)
+        tot_fa += fa
+        tot_fi += fi
+        rows_f.append([
+            str(r.get("numero_op", r.get("op", ""))),
+            str(r.get("nf", "")),
+            str(fa),
+            str(fi),
+            str(r.get("peso_kg", r.get("peso", ""))),
+        ])
     _add_table(pdf, headers_f, rows_f, col_widths_f)
-
-    # Fardoes
-    fardoes = [r for r in registros if str(r.get("tipo_fardo", r.get("tipo", ""))).lower() == "fardao"]
-    _section_title(pdf, "Fardoes")
-    rows_fd = [
-        [str(r.get("numero_op", r.get("op", ""))), str(r.get("nf", "")),
-         str(r.get("quantidade", "")), str(r.get("peso_kg", r.get("peso", "")))]
-        for r in fardoes
-    ]
-    _add_table(pdf, headers_f, rows_fd, col_widths_f)
+    pdf.ln(2)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 6, f"Total: {tot_fa} fardoes | {tot_fi} fardinhos", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
 
     # Perdas
     perdas = [r for r in registros if str(r.get("tipo_fardo", r.get("tipo", ""))).lower() == "perdas"]
