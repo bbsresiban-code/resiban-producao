@@ -13,6 +13,7 @@ from supabase import create_client, Client
 WORKSHEETS = [
     "aparas_estoque",
     "op_lavacao", "op_lavacao_nfs", "producao_lavacao", "paradas_lavacao",
+    "turno_lavacao",
     "op_extrusao", "producao_extrusao", "manutencao_extrusao",
     "qualidade", "romaneio", "romaneio_itens", "mistura",
 ]

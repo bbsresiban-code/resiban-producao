@@ -5,9 +5,11 @@ import streamlit as st
 import pandas as pd
 from datetime import date, datetime, timedelta, time
 
-from utils.database import read_sheet, read_sheet_no_cache, append_row
+from utils.database import (
+    read_sheet, read_sheet_no_cache, append_row, update_row_multi,
+)
 from utils.formatters import (
-    formatar_data, formatar_peso, TURNOS, TIPOS_PARADA,
+    formatar_data, formatar_peso, formatar_duracao, TURNOS, TIPOS_PARADA,
     fardos_breakdown, tipo_fardo_label, formatar_fardos,
 )
 
@@ -20,6 +22,16 @@ except ImportError:
 # Titulo
 # ---------------------------------------------------------------------------
 st.header("Producao - Lavacao")
+
+# ---------------------------------------------------------------------------
+# Perfil / turno do usuario logado (usado por todas as abas)
+# ---------------------------------------------------------------------------
+usuario_logado = st.session_state.get("usuario", "master")
+perfil_logado = st.session_state.get("perfil", "master")
+if perfil_logado == "turno":
+    turno_fixo = usuario_logado[-1].upper()
+else:
+    turno_fixo = None
 
 tab_lancamento, tab_paradas, tab_historico = st.tabs(
     ["Lancamento", "Paradas", "Historico"]
@@ -91,6 +103,34 @@ def carregar_producao_existente(numero_op: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def carregar_registro_turno(data_str: str, turno: str) -> dict | None:
+    """Retorna a linha de turno_lavacao (dict) para data+turno, ou None."""
+    try:
+        df = read_sheet_no_cache("turno_lavacao")
+        if df.empty:
+            return None
+        m = (df["data"].astype(str) == data_str) & (df["turno"].astype(str) == turno)
+        sub = df[m]
+        if sub.empty:
+            return None
+        return sub.iloc[0].to_dict()
+    except Exception:
+        return None
+
+
+def duracao_minutos(hora_inicio: str, hora_fim: str) -> int | None:
+    """Minutos entre 'HH:MM' inicio e fim (assume virada de meia-noite se fim<=inicio)."""
+    try:
+        hi = datetime.strptime(str(hora_inicio), "%H:%M")
+        hf = datetime.strptime(str(hora_fim), "%H:%M")
+    except (ValueError, TypeError):
+        return None
+    delta = (hf - hi).total_seconds() / 60
+    if delta <= 0:
+        delta += 24 * 60
+    return int(delta)
+
+
 # ===========================================================================
 # TAB: Lancamento
 # ===========================================================================
@@ -98,14 +138,6 @@ with tab_lancamento:
     st.subheader("Lancamento de Producao Diaria")
 
     ops_abertas = carregar_ops_abertas()
-
-    usuario_logado = st.session_state.get("usuario", "master")
-    perfil_logado = st.session_state.get("perfil", "master")
-
-    if perfil_logado == "turno":
-        turno_fixo = usuario_logado[-1].upper()
-    else:
-        turno_fixo = None
 
     col_sel1, col_sel2, col_sel3 = st.columns(3)
     with col_sel1:
@@ -125,6 +157,85 @@ with tab_lancamento:
             st.warning("Nenhuma OP aberta encontrada.")
             numero_op = None
 
+    data_str_sel = data_prod.isoformat()
+
+    # -------------------------------------------------------------------
+    # Secao: Controle de Turno (inicio / fim)
+    # -------------------------------------------------------------------
+    st.divider()
+    with st.container(border=True):
+        st.markdown("#### Controle de Turno")
+        reg_turno = carregar_registro_turno(data_str_sel, turno)
+        h_ini = str(reg_turno.get("hora_inicio", "") or "") if reg_turno else ""
+        h_fim = str(reg_turno.get("hora_fim", "") or "") if reg_turno else ""
+
+        col_ct1, col_ct2 = st.columns([2, 1])
+        with col_ct1:
+            if not reg_turno or not h_ini:
+                st.caption(f"Turno {turno} - {formatar_data(data_prod)}: **nao iniciado**.")
+            elif not h_fim:
+                st.success(f"Turno {turno} iniciado as **{h_ini}** (em andamento).")
+            else:
+                dur = duracao_minutos(h_ini, h_fim)
+                st.info(
+                    f"Turno {turno}: **{h_ini} -> {h_fim}** "
+                    f"(duracao {formatar_duracao(dur) if dur is not None else '-'})"
+                )
+        with col_ct2:
+            agora = datetime.now().strftime("%H:%M")
+            if not reg_turno or not h_ini:
+                if st.button("Iniciar Turno", type="primary", use_container_width=True, key="btn_iniciar_turno"):
+                    try:
+                        append_row("turno_lavacao", {
+                            "data": data_str_sel,
+                            "turno": turno,
+                            "numero_op": numero_op or "",
+                            "hora_inicio": agora,
+                            "hora_fim": "",
+                            "registrado_por": usuario_logado,
+                            "observacao": "",
+                        })
+                        st.toast(f"Turno iniciado as {agora}")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Erro ao iniciar turno: {exc}")
+            elif not h_fim:
+                if st.button("Encerrar Turno", type="primary", use_container_width=True, key="btn_encerrar_turno"):
+                    try:
+                        update_row_multi("turno_lavacao", "id", str(reg_turno["id"]), {"hora_fim": agora})
+                        st.toast(f"Turno encerrado as {agora}")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Erro ao encerrar turno: {exc}")
+
+        # Ajuste manual dos horarios (correcao)
+        if reg_turno:
+            with st.expander("Ajustar horarios"):
+                with st.form("form_ajustar_turno", clear_on_submit=False):
+                    try:
+                        v_ini = datetime.strptime(h_ini, "%H:%M").time() if h_ini else time(6, 0)
+                    except ValueError:
+                        v_ini = time(6, 0)
+                    try:
+                        v_fim = datetime.strptime(h_fim, "%H:%M").time() if h_fim else time(14, 0)
+                    except ValueError:
+                        v_fim = time(14, 0)
+                    col_aj1, col_aj2 = st.columns(2)
+                    with col_aj1:
+                        aj_ini = st.time_input("Hora Inicio", value=v_ini, key="aj_ini_turno")
+                    with col_aj2:
+                        aj_fim = st.time_input("Hora Fim", value=v_fim, key="aj_fim_turno")
+                    if st.form_submit_button("Salvar horarios", use_container_width=True):
+                        try:
+                            update_row_multi("turno_lavacao", "id", str(reg_turno["id"]), {
+                                "hora_inicio": aj_ini.strftime("%H:%M"),
+                                "hora_fim": aj_fim.strftime("%H:%M"),
+                            })
+                            st.toast("Horarios atualizados!")
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"Erro ao salvar horarios: {exc}")
+
     # -------------------------------------------------------------------
     # Carregar NFs da OP e producao existente
     # -------------------------------------------------------------------
@@ -143,21 +254,23 @@ with tab_lancamento:
     st.divider()
 
     # -------------------------------------------------------------------
-    # Para cada NF, mostrar card com planejado / lancado / restante
+    # Calcular planejado/lancado/restante por NF
     # -------------------------------------------------------------------
+    def _cor_progresso(val):
+        if val >= 100:
+            return "background-color: #d4edda; color: #155724"
+        elif val > 0:
+            return "background-color: #fff3cd; color: #856404"
+        return "background-color: #f8d7da; color: #721c24"
+
+    nf_calc = []
     if numero_op and nfs_da_op:
         for idx_nf, nf_info in enumerate(nfs_da_op):
             nf_numero = nf_info["nf_apara"]
-            nf_fornec = nf_info["fornecedor"]
-            nf_tipo = nf_info["tipo_fardo"]
             nf_fa_plan = int(nf_info.get("qtd_fardao", 0) or 0)
             nf_fi_plan = int(nf_info.get("qtd_fardinho", 0) or 0)
-            nf_qtd_plan = nf_info["quant_fardos"]
-            nf_peso_plan = nf_info["peso_kg"]
+            nf_peso_plan = float(nf_info["peso_kg"])
 
-            st.subheader(f"NF {nf_numero} - {nf_fornec} ({nf_tipo})")
-
-            # Calcular ja lancado para esta NF (por tipo de fardo)
             fa_lancado = 0
             fi_lancado = 0
             peso_lancado = 0.0
@@ -173,110 +286,141 @@ with tab_lancamento:
 
             fa_rest = max(0, nf_fa_plan - fa_lancado)
             fi_rest = max(0, nf_fi_plan - fi_lancado)
-            qtd_restante = fa_rest + fi_rest
-            peso_restante = max(0.0, nf_peso_plan - peso_lancado)
+            peso_rest = max(0.0, nf_peso_plan - peso_lancado)
+            pct = (peso_lancado / nf_peso_plan * 100) if nf_peso_plan > 0 else 0.0
 
-            col_m1, col_m2, col_m3 = st.columns(3)
-            with col_m1:
-                st.metric(
-                    "Planejado",
-                    f"{formatar_fardos(nf_fa_plan, nf_fi_plan)} / {formatar_peso(nf_peso_plan)}",
-                )
-            with col_m2:
-                st.metric(
-                    "Ja Lancado",
-                    f"{formatar_fardos(fa_lancado, fi_lancado)} / {formatar_peso(peso_lancado)}",
-                )
-            with col_m3:
-                st.metric(
-                    "Restante",
-                    f"{formatar_fardos(fa_rest, fi_rest)} / {formatar_peso(peso_restante)}",
-                )
+            nf_calc.append({
+                "idx": idx_nf, "info": nf_info,
+                "fa_plan": nf_fa_plan, "fi_plan": nf_fi_plan, "peso_plan": nf_peso_plan,
+                "fa_lanc": fa_lancado, "fi_lanc": fi_lancado, "peso_lanc": peso_lancado,
+                "fa_rest": fa_rest, "fi_rest": fi_rest, "peso_rest": peso_rest,
+                "pct": round(pct, 1),
+            })
 
-            if qtd_restante > 0 and peso_restante > 0:
-                with st.form(
-                    f"form_nf_{idx_nf}_{nf_numero}", clear_on_submit=True
-                ):
-                    col_f1, col_f2, col_f3 = st.columns(3)
-                    with col_f1:
-                        if nf_fa_plan > 0:
-                            reg_fa_in = st.number_input(
-                                "Qtd Fardoes", min_value=0, max_value=fa_rest,
-                                step=1, key=f"fa_nf_{idx_nf}", value=None,
-                            )
-                        else:
-                            reg_fa_in = None
-                            st.caption("Sem fardoes nesta NF")
-                    with col_f2:
-                        if nf_fi_plan > 0:
-                            reg_fi_in = st.number_input(
-                                "Qtd Fardinhos", min_value=0, max_value=fi_rest,
-                                step=1, key=f"fi_nf_{idx_nf}", value=None,
-                            )
-                        else:
-                            reg_fi_in = None
-                            st.caption("Sem fardinhos nesta NF")
-                    with col_f3:
-                        peso_kg = st.number_input(
-                            "Peso (kg)",
-                            min_value=0.0,
-                            max_value=float(peso_restante),
-                            step=0.5,
-                            format="%.1f",
-                            key=f"peso_nf_{idx_nf}",
-                            value=None,
+    # -------------------------------------------------------------------
+    # Resumo geral (todas as NFs da OP)
+    # -------------------------------------------------------------------
+    if nf_calc:
+        st.subheader("Progresso da OP")
+        linhas_resumo = []
+        for c in nf_calc:
+            info = c["info"]
+            linhas_resumo.append({
+                "NF": info["nf_apara"],
+                "Fornecedor": info["fornecedor"],
+                "Planejado": formatar_fardos(c["fa_plan"], c["fi_plan"]),
+                "Lancado": formatar_fardos(c["fa_lanc"], c["fi_lanc"]),
+                "Restante": formatar_fardos(c["fa_rest"], c["fi_rest"]),
+                "Peso Plan.": c["peso_plan"],
+                "Peso Lanc.": c["peso_lanc"],
+                "% Concl.": c["pct"],
+            })
+        df_resumo_nf = pd.DataFrame(linhas_resumo)
+        styled_resumo = df_resumo_nf.style.map(_cor_progresso, subset=["% Concl."]).format(
+            {"Peso Plan.": "{:.1f}", "Peso Lanc.": "{:.1f}", "% Concl.": "{:.1f}%"}
+        )
+        st.dataframe(styled_resumo, use_container_width=True, hide_index=True)
+
+        tot_peso_plan = sum(c["peso_plan"] for c in nf_calc)
+        tot_peso_lanc = sum(c["peso_lanc"] for c in nf_calc)
+        pct_geral = (tot_peso_lanc / tot_peso_plan * 100) if tot_peso_plan > 0 else 0.0
+        st.progress(min(pct_geral / 100, 1.0), text=f"OP {pct_geral:.1f}% concluida (por peso)")
+
+    # -------------------------------------------------------------------
+    # Secao: A Lancar (apenas NFs com restante)
+    # -------------------------------------------------------------------
+    pendentes = [c for c in nf_calc if (c["fa_rest"] + c["fi_rest"]) > 0 and c["peso_rest"] > 0]
+    if nf_calc and not pendentes:
+        st.success("Todas as NFs desta OP foram totalmente lancadas.")
+
+    for c in pendentes:
+        info = c["info"]
+        idx_nf = c["idx"]
+        nf_numero = info["nf_apara"]
+        nf_tipo = info["tipo_fardo"]
+        with st.container(border=True):
+            st.markdown(f"**NF {nf_numero}** - {info['fornecedor']} ({nf_tipo})")
+            st.progress(
+                min(c["pct"] / 100, 1.0),
+                text=(
+                    f"{c['pct']:.0f}% | Restante: "
+                    f"{formatar_fardos(c['fa_rest'], c['fi_rest'])} / {formatar_peso(c['peso_rest'])}"
+                ),
+            )
+            with st.form(f"form_nf_{idx_nf}_{nf_numero}", clear_on_submit=True):
+                col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+                with col_f1:
+                    if c["fa_plan"] > 0:
+                        reg_fa_in = st.number_input(
+                            "Qtd Fardoes", min_value=0, max_value=c["fa_rest"],
+                            step=1, key=f"fa_nf_{idx_nf}", value=None,
                         )
-                    submit_nf = st.form_submit_button(
-                        "Registrar producao",
-                        type="primary",
-                        use_container_width=True,
-                    )
-
-                if submit_nf:
-                    reg_fa = int(reg_fa_in or 0)
-                    reg_fi = int(reg_fi_in or 0)
-                    qtd_total = reg_fa + reg_fi
-                    erros = []
-                    if qtd_total <= 0:
-                        erros.append("Informe a quantidade de fardoes e/ou fardinhos.")
-                    if not peso_kg or peso_kg <= 0:
-                        erros.append("Peso deve ser maior que zero.")
-                    if erros:
-                        for e in erros:
-                            st.error(e)
                     else:
-                        try:
-                            tipo_reg = tipo_fardo_label(reg_fa, reg_fi).lower() or nf_tipo.lower()
-                            dados = {
-                                "data": data_prod.isoformat(),
-                                "turno": turno,
-                                "numero_op": numero_op,
-                                "tipo_fardo": tipo_reg,
-                                "qtd_fardao": reg_fa,
-                                "qtd_fardinho": reg_fi,
-                                "nf": nf_numero,
-                                "quantidade": qtd_total,
-                                "peso_kg": float(peso_kg or 0),
-                                "perda_lixo_kg": 0,
-                                "perda_papelao_kg": 0,
-                                "perda_plastico_colorido_kg": 0,
-                                "perda_total_kg": 0,
-                                "registrado_por": "",
-                            }
-                            append_row("producao_lavacao", dados)
-                            st.toast("Producao registrada com sucesso!")
-                            st.success(
-                                f"NF **{nf_numero}** - "
-                                f"{formatar_fardos(reg_fa, reg_fi)} / "
-                                f"{formatar_peso(float(peso_kg or 0))} registrado."
-                            )
-                            st.rerun()
-                        except Exception as exc:
-                            st.error(f"Erro ao registrar producao: {exc}")
-            else:
-                st.success("NF totalmente consumida.")
+                        reg_fa_in = None
+                        st.caption("Sem fardoes")
+                with col_f2:
+                    if c["fi_plan"] > 0:
+                        reg_fi_in = st.number_input(
+                            "Qtd Fardinhos", min_value=0, max_value=c["fi_rest"],
+                            step=1, key=f"fi_nf_{idx_nf}", value=None,
+                        )
+                    else:
+                        reg_fi_in = None
+                        st.caption("Sem fardinhos")
+                with col_f3:
+                    peso_kg = st.number_input(
+                        "Peso (kg)", min_value=0.0, max_value=float(c["peso_rest"]),
+                        step=0.5, format="%.1f", key=f"peso_nf_{idx_nf}", value=None,
+                    )
+                with col_f4:
+                    hora_fardo = st.time_input(
+                        "Hora", value=datetime.now().time(), key=f"hora_nf_{idx_nf}",
+                    )
+                submit_nf = st.form_submit_button(
+                    "Registrar producao", type="primary", use_container_width=True,
+                )
 
-            st.divider()
+            if submit_nf:
+                reg_fa = int(reg_fa_in or 0)
+                reg_fi = int(reg_fi_in or 0)
+                qtd_total = reg_fa + reg_fi
+                erros = []
+                if qtd_total <= 0:
+                    erros.append("Informe a quantidade de fardoes e/ou fardinhos.")
+                if not peso_kg or peso_kg <= 0:
+                    erros.append("Peso deve ser maior que zero.")
+                if erros:
+                    for e in erros:
+                        st.error(e)
+                else:
+                    try:
+                        tipo_reg = tipo_fardo_label(reg_fa, reg_fi).lower() or nf_tipo.lower()
+                        dados = {
+                            "data": data_prod.isoformat(),
+                            "turno": turno,
+                            "hora": hora_fardo.strftime("%H:%M"),
+                            "numero_op": numero_op,
+                            "tipo_fardo": tipo_reg,
+                            "qtd_fardao": reg_fa,
+                            "qtd_fardinho": reg_fi,
+                            "nf": nf_numero,
+                            "quantidade": qtd_total,
+                            "peso_kg": float(peso_kg or 0),
+                            "perda_lixo_kg": 0,
+                            "perda_papelao_kg": 0,
+                            "perda_plastico_colorido_kg": 0,
+                            "perda_total_kg": 0,
+                            "registrado_por": usuario_logado,
+                        }
+                        append_row("producao_lavacao", dados)
+                        st.toast("Producao registrada com sucesso!")
+                        st.success(
+                            f"NF **{nf_numero}** - {formatar_fardos(reg_fa, reg_fi)} / "
+                            f"{formatar_peso(float(peso_kg or 0))} as {hora_fardo.strftime('%H:%M')}."
+                        )
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Erro ao registrar producao: {exc}")
 
     # -------------------------------------------------------------------
     # Secao: Separacao / Perdas
@@ -439,11 +583,76 @@ with tab_lancamento:
             with col_r4:
                 st.metric("Fardinhos / Fardoes", f"{n_fardinhos} / {n_fardoes}")
 
+            # ---- Eficiencia do turno (usa inicio/fim + paradas) ----
+            reg_t = carregar_registro_turno(data_str, turno)
+            h_ini_t = str(reg_t.get("hora_inicio", "") or "") if reg_t else ""
+            h_fim_t = str(reg_t.get("hora_fim", "") or "") if reg_t else ""
+            paradas_min = 0
+            for p in paradas_turno:
+                try:
+                    paradas_min += int(float(p.get("duracao_min", 0) or 0))
+                except (ValueError, TypeError):
+                    pass
+
+            dur_bruta = None
+            dur_liquida = None
+            kg_h = None
+            if h_ini_t and h_fim_t:
+                dur_bruta = duracao_minutos(h_ini_t, h_fim_t)
+                if dur_bruta is not None:
+                    dur_liquida = max(0, dur_bruta - paradas_min)
+                    horas_liq = dur_liquida / 60
+                    kg_h = (total_fardos_peso / horas_liq) if horas_liq > 0 else 0.0
+
+            st.markdown("##### Eficiencia do Turno")
+            if dur_bruta is None:
+                st.info(
+                    "Registre o inicio e o fim do turno (secao 'Controle de Turno' no topo) "
+                    "para calcular a eficiencia."
+                )
+            else:
+                col_e1, col_e2, col_e3, col_e4 = st.columns(4)
+                col_e1.metric("Duracao Turno", formatar_duracao(dur_bruta))
+                col_e2.metric("Tempo Parado", formatar_duracao(paradas_min))
+                col_e3.metric("Tempo Liquido", formatar_duracao(dur_liquida))
+                col_e4.metric("Produtividade", f"{kg_h:,.0f} kg/h".replace(",", "."))
+
+            turno_info = {
+                "hora_inicio": h_ini_t,
+                "hora_fim": h_fim_t,
+                "duracao_bruta": dur_bruta,
+                "paradas_min": paradas_min,
+                "duracao_liquida": dur_liquida,
+                "kg_h": kg_h,
+            }
+
+            # ---- Producao por hora ----
+            st.markdown("##### Producao por Hora")
+            if "hora" in df_fardos.columns and df_fardos["hora"].astype(str).str.strip().ne("").any():
+                df_fh = df_fardos.copy()
+                df_fh["hora"] = df_fh["hora"].astype(str).str.strip().replace("", "sem hora")
+                df_fh["__fa"] = df_fh.apply(lambda r: fardos_breakdown(r)[0], axis=1)
+                df_fh["__fi"] = df_fh.apply(lambda r: fardos_breakdown(r)[1], axis=1)
+                por_hora = df_fh.groupby("hora").agg(
+                    Fardoes=("__fa", "sum"),
+                    Fardinhos=("__fi", "sum"),
+                    Peso=("peso_kg", "sum"),
+                ).reset_index().rename(columns={"hora": "Hora"}).sort_values("Hora")
+                col_ph1, col_ph2 = st.columns([1, 1])
+                with col_ph1:
+                    df_ph_show = por_hora.copy()
+                    df_ph_show["Peso"] = df_ph_show["Peso"].apply(formatar_peso)
+                    st.dataframe(df_ph_show, use_container_width=True, hide_index=True)
+                with col_ph2:
+                    st.bar_chart(por_hora.set_index("Hora")["Peso"], y_label="kg")
+            else:
+                st.caption("Sem horarios registrados nos lancamentos deste turno.")
+
             # Botao PDF
             if gerar_pdf_producao_lavacao is not None:
                 try:
                     pdf_bytes = gerar_pdf_producao_lavacao(
-                        data_str, turno, registros_turno, paradas_turno
+                        data_str, turno, registros_turno, paradas_turno, turno_info
                     )
                     st.download_button(
                         "Baixar PDF do Turno",
@@ -541,8 +750,12 @@ with tab_paradas:
     # Exibir paradas recentes
     st.divider()
     st.subheader("Paradas Recentes")
+    if turno_fixo:
+        st.caption(f"Exibindo apenas paradas do Turno {turno_fixo}.")
     try:
         df_paradas = read_sheet("paradas_lavacao")
+        if turno_fixo and not df_paradas.empty and "turno" in df_paradas.columns:
+            df_paradas = df_paradas[df_paradas["turno"].astype(str) == turno_fixo]
         if df_paradas.empty:
             st.info("Nenhuma parada registrada.")
         else:
@@ -585,11 +798,15 @@ with tab_historico:
             key="hist_data_fim",
         )
     with col_h3:
-        hist_turno = st.selectbox(
-            "Turno",
-            options=["Todos"] + TURNOS,
-            key="hist_turno",
-        )
+        if turno_fixo:
+            hist_turno = turno_fixo
+            st.info(f"Turno: **{turno_fixo}**")
+        else:
+            hist_turno = st.selectbox(
+                "Turno",
+                options=["Todos"] + TURNOS,
+                key="hist_turno",
+            )
 
     try:
         df_hist = read_sheet("producao_lavacao")
@@ -667,7 +884,7 @@ with tab_historico:
             df_filtrado["qtd_fardinho"] = df_filtrado.apply(lambda r: fardos_breakdown(r)[1], axis=1)
 
             colunas_exibir = [
-                "data", "turno", "numero_op", "tipo_fardo", "nf",
+                "data", "hora", "turno", "numero_op", "tipo_fardo", "nf",
                 "qtd_fardao", "qtd_fardinho", "quantidade", "peso_kg",
                 "perda_lixo_kg", "perda_papelao_kg",
                 "perda_plastico_colorido_kg", "perda_total_kg",

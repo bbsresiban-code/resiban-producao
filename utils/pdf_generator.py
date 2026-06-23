@@ -316,18 +316,32 @@ def gerar_pdf_fechamento_op_lavacao(
 # 2. Controle de Producao - Lavacao
 # ---------------------------------------------------------------------------
 
+def _fmt_dur(minutos) -> str:
+    try:
+        m = int(round(float(minutos)))
+    except (ValueError, TypeError):
+        return "-"
+    if m < 0:
+        return "-"
+    h, mm = divmod(m, 60)
+    return f"{h}h{mm:02d}"
+
+
 def gerar_pdf_producao_lavacao(
     data: str,
     turno: str,
     registros: list[dict],
     paradas: list[dict],
+    turno_info: dict | None = None,
 ) -> bytes:
     """
     Gera PDF do Controle de Producao de Lavacao.
 
-    registros item keys: tipo (fardinhos|fardoes), op, nf, quantidade, peso,
-                         lixo, papelao, plastico_colorido, total_perda, perc_perda
-    paradas item keys: tipo, inicio, fim, duracao, obs
+    registros item keys: tipo_fardo, numero_op, nf, qtd_fardao, qtd_fardinho,
+                         quantidade, peso_kg, hora, perdas...
+    paradas item keys: tipo_parada, hora_inicio, hora_fim, duracao_min, observacao
+    turno_info (opcional): hora_inicio, hora_fim, duracao_bruta, paradas_min,
+                           duracao_liquida, kg_h
     """
     pdf = _create_pdf()
     _header(pdf, "CONTROLE DE PRODUCAO LAVACAO")
@@ -335,15 +349,31 @@ def gerar_pdf_producao_lavacao(
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(90, 7, f"Data: {data}", new_x="END", new_y="TOP")
     pdf.cell(0, 7, f"Turno: {turno}", new_x="LMARGIN", new_y="NEXT")
+
+    # Inicio/fim e eficiencia do turno
+    if turno_info:
+        ini = turno_info.get("hora_inicio") or "-"
+        fim = turno_info.get("hora_fim") or "-"
+        pdf.set_font("Helvetica", "", 9)
+        pdf.cell(0, 6, f"Turno: {ini} -> {fim}  |  Duracao: {_fmt_dur(turno_info.get('duracao_bruta'))}  "
+                       f"|  Parado: {_fmt_dur(turno_info.get('paradas_min'))}  "
+                       f"|  Liquido: {_fmt_dur(turno_info.get('duracao_liquida'))}",
+                 new_x="LMARGIN", new_y="NEXT")
+        kg_h = turno_info.get("kg_h")
+        if kg_h is not None:
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.cell(0, 6, f"Produtividade: {kg_h:,.0f} kg/h".replace(",", "."),
+                     new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
     registros = registros or []
 
     # Producao por NF (inclui Misto: fardoes + fardinhos na mesma NF)
     fardos = [r for r in registros if str(r.get("tipo_fardo", r.get("tipo", ""))).lower() != "perdas"]
+    fardos = sorted(fardos, key=lambda r: str(r.get("hora", "")))
     _section_title(pdf, "Producao por NF")
-    headers_f = ["OP", "NF", "Fardoes", "Fardinhos", "Peso (kg)"]
-    col_widths_f = [35, 40, 30, 30, 45]
+    headers_f = ["Hora", "OP", "NF", "Fardoes", "Fardinhos", "Peso (kg)"]
+    col_widths_f = [20, 30, 35, 28, 28, 39]
     rows_f = []
     tot_fa = 0
     tot_fi = 0
@@ -352,6 +382,7 @@ def gerar_pdf_producao_lavacao(
         tot_fa += fa
         tot_fi += fi
         rows_f.append([
+            str(r.get("hora", "") or "-"),
             str(r.get("numero_op", r.get("op", ""))),
             str(r.get("nf", "")),
             str(fa),

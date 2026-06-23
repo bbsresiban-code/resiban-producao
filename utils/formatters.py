@@ -111,10 +111,22 @@ CORES = [
 ]
 
 TIPOS_PARADA = [
-    "Quebra",
     "Manutencao Corretiva",
-    "Manutencao Preventiva Programada",
+    "Corretiva Programada",
+    "Manutencao Preventiva",
 ]
+
+
+def formatar_duracao(minutos) -> str:
+    """Converte minutos em texto 'HhMM' (ex.: 488 -> '8h08'). '-' se invalido."""
+    try:
+        m = int(round(float(minutos)))
+    except (ValueError, TypeError):
+        return "-"
+    if m < 0:
+        return "-"
+    h, mm = divmod(m, 60)
+    return f"{h}h{mm:02d}"
 
 LOCAIS_ESTOQUE = [
     "A1", "A2", "A3", "A4", "A5", "A6",
