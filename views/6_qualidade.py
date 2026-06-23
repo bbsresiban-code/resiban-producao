@@ -3,7 +3,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
 import pandas as pd
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 from utils.database import read_sheet, read_sheet_no_cache, append_row, update_rows, update_row_multi
 from utils.formatters import (
@@ -26,6 +26,10 @@ tab_analisar, tab_editar, tab_historico = st.tabs(["Analisar Lote", "Editar Anal
 # ===========================================================================
 with tab_analisar:
     st.subheader("Analise de Lote")
+
+    # Mensagem de sucesso persistente (sobrevive ao rerun de limpeza)
+    if st.session_state.get("qual_msg_sucesso"):
+        st.success(st.session_state["qual_msg_sucesso"])
 
     # Carregar lotes com status em_analise
     try:
@@ -123,6 +127,9 @@ with tab_analisar:
                     )
                     analista = st.text_input("Analista", key="qual_analista")
                     data_analise = st.date_input("Data da Analise", value=date.today(), key="qual_data")
+                    hora_analise = st.time_input(
+                        "Hora da Analise", value=datetime.now().time(), key="qual_hora"
+                    )
 
                 observacao = st.text_area("Observacao", key="qual_obs")
 
@@ -164,6 +171,7 @@ with tab_analisar:
                                 "local_estoque": "",
                                 "analista": analista.strip(),
                                 "data_analise": data_analise.isoformat(),
+                                "hora": hora_analise.strftime("%H:%M"),
                                 "observacao": observacao.strip(),
                             }
                             append_row("qualidade", analise_data)
@@ -178,11 +186,17 @@ with tab_analisar:
                             )
 
                             resultado_completo = f"{grade} - {cor}"
-                            st.toast("Analise registrada com sucesso!")
-                            st.success(
-                                f"Analise do lote **{codigo_lote_sel}** registrada. "
-                                f"Resultado: **{resultado_completo}**"
+                            # Mensagem persistente + limpar medicoes (mantem analista/data)
+                            st.session_state["qual_msg_sucesso"] = (
+                                f"Analise do lote {codigo_lote_sel} registrada. "
+                                f"Resultado: {resultado_completo}."
                             )
+                            for k in ["qual_mfi", "qual_grade", "qual_cor", "qual_umidade",
+                                      "qual_filme", "qual_cinzas", "qual_dens", "qual_obs",
+                                      "qual_hora"]:
+                                st.session_state.pop(k, None)
+                            st.toast("Analise registrada com sucesso!")
+                            st.rerun()
                         except Exception as exc:
                             st.error(f"Erro ao registrar analise: {exc}")
 
@@ -333,10 +347,11 @@ with tab_historico:
         else:
             df_filtrado = df_filtrado.sort_values("data_analise_dt", ascending=False)
 
-            df_exibir = df_filtrado[
-                [
+            colunas_hist = [
+                c for c in [
                     "codigo_lote",
                     "data_analise",
+                    "hora",
                     "mfi",
                     "teor_cinzas",
                     "densidade",
@@ -347,8 +362,9 @@ with tab_historico:
                     "local_estoque",
                     "analista",
                     "observacao",
-                ]
-            ].copy()
+                ] if c in df_filtrado.columns
+            ]
+            df_exibir = df_filtrado[colunas_hist].copy()
             df_exibir["data_analise"] = df_exibir["data_analise"].apply(formatar_data)
 
             st.dataframe(df_exibir, use_container_width=True, hide_index=True)

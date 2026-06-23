@@ -21,6 +21,10 @@ tab_classificar, tab_historico = st.tabs(["Classificar NF", "Historico"])
 with tab_classificar:
     st.subheader("Classificar NFs em aguardando classificacao")
 
+    # Mensagem de sucesso persistente (sobrevive ao rerun apos classificar)
+    if st.session_state.get("clf_msg_sucesso"):
+        st.success(st.session_state["clf_msg_sucesso"])
+
     try:
         df_estoque = read_sheet_no_cache("aparas_estoque")
     except Exception as exc:
@@ -196,7 +200,7 @@ with tab_classificar:
                                     },
                                 )
 
-                                st.success(
+                                st.session_state["clf_msg_sucesso"] = (
                                     f"NF {nf_row.get('numero_nf', '')} "
                                     f"classificada como Qualidade {qualidade}."
                                 )
