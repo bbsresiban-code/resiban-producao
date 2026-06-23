@@ -227,6 +227,7 @@ with tab_rastreio:
                 df_nfs_rast = read_sheet("op_lavacao_nfs")
                 df_qual_rast = read_sheet("qualidade")
                 df_mistura_rast = read_sheet("mistura")
+                df_extra_rast = read_sheet("ope_material_extra")
             except Exception:
                 df_itens_rast = pd.DataFrame()
                 df_ext_rast = pd.DataFrame()
@@ -235,6 +236,7 @@ with tab_rastreio:
                 df_nfs_rast = pd.DataFrame()
                 df_qual_rast = pd.DataFrame()
                 df_mistura_rast = pd.DataFrame()
+                df_extra_rast = pd.DataFrame()
 
             if df_itens_rast.empty:
                 st.warning("Nenhum item encontrado.")
@@ -253,6 +255,7 @@ with tab_rastreio:
                         cor = ""
                         lotes_mistura = ""
                         perc_reciclado = ""
+                        material_extra = ""
 
                         if not df_ext_rast.empty and "codigo_lote" in df_ext_rast.columns:
                             lote_row = df_ext_rast[df_ext_rast["codigo_lote"].astype(str) == codigo_lote]
@@ -274,6 +277,18 @@ with tab_rastreio:
                                         ope_row = df_ops_ext_rast[df_ops_ext_rast["numero_op"].astype(str) == ope]
                                         if not ope_row.empty:
                                             origem = str(ope_row.iloc[0].get("origem", ""))
+
+                                # Material extra lancado pelo master nesta OPE
+                                if ope and not df_extra_rast.empty and "numero_op" in df_extra_rast.columns:
+                                    extras_l = df_extra_rast[df_extra_rast["numero_op"].astype(str) == ope]
+                                    if not extras_l.empty:
+                                        partes_x = []
+                                        for _, ex in extras_l.iterrows():
+                                            tj = str(ex.get("tipo_justificativa", "") or "")
+                                            ds = str(ex.get("descricao", "") or "")
+                                            pk = ex.get("peso_kg", "")
+                                            partes_x.append(f"{tj}: {ds} ({pk}kg)".strip())
+                                        material_extra = " | ".join(partes_x)
 
                                 if opl and not df_ops_lav_rast.empty and not df_nfs_rast.empty:
                                     opl_row = df_ops_lav_rast[df_ops_lav_rast["numero_op"].astype(str) == opl]
@@ -300,6 +315,7 @@ with tab_rastreio:
                             "grade": grade,
                             "cor": cor,
                             "perc_reciclado": perc_reciclado,
+                            "material_extra": material_extra,
                         }
 
                     itens_rastreio = []
@@ -333,6 +349,7 @@ with tab_rastreio:
                             "Origem": i["origem"],
                             "OPL": i["opl"],
                             "NFs MP": ", ".join(i["nfs_mp"]) if isinstance(i["nfs_mp"], list) else i["nfs_mp"],
+                            "Material Extra": i.get("material_extra", ""),
                             "Lotes Mistura": i.get("lotes_mistura", ""),
                             "Grade": i["grade"],
                             "Cor": i["cor"],

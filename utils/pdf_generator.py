@@ -505,12 +505,14 @@ def gerar_pdf_producao_extrusao(
     turno: str,
     registros: list[dict],
     manutencao: list[dict],
+    turno_info: dict | None = None,
 ) -> bytes:
     """
     Gera PDF do Relatorio Diario de Extrusao.
 
     registros item keys: hora, lote, extrusora, peso, op, obs
     manutencao item keys: troca_telas, limpeza_gaveta, troca_facas, obs
+    turno_info (opcional): hora_inicio, hora_fim, duracao_bruta, kg_h
     """
     pdf = _create_pdf()
     _header(pdf, "RELATORIO DIARIO DE EXTRUSAO")
@@ -518,6 +520,18 @@ def gerar_pdf_producao_extrusao(
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(90, 7, f"Data: {data}", new_x="END", new_y="TOP")
     pdf.cell(0, 7, f"Turno: {turno}", new_x="LMARGIN", new_y="NEXT")
+
+    if turno_info:
+        ini = turno_info.get("hora_inicio") or "-"
+        fim = turno_info.get("hora_fim") or "-"
+        pdf.set_font("Helvetica", "", 9)
+        pdf.cell(0, 6, f"Turno: {ini} -> {fim}  |  Duracao: {_fmt_dur(turno_info.get('duracao_bruta'))}",
+                 new_x="LMARGIN", new_y="NEXT")
+        kg_h = turno_info.get("kg_h")
+        if kg_h is not None:
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.cell(0, 6, f"Produtividade: {kg_h:,.0f} kg/h".replace(",", "."),
+                     new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
     # Tabela de registros
@@ -720,8 +734,8 @@ def gerar_pdf_laudo_rastreabilidade(romaneio: dict, itens_rastreio: list[dict]) 
              align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
-    headers = ["Lote", "Peso (kg)", "% Recic.", "OPE", "Origem", "OPL", "NFs de MP", "Grade", "Cor"]
-    col_w = [22, 16, 18, 16, 16, 16, 30, 18, 16]
+    headers = ["Lote", "Peso", "% Rec.", "OPE", "Origem", "OPL", "NFs de MP", "Mat. Extra", "Grade", "Cor"]
+    col_w = [20, 14, 14, 15, 15, 15, 27, 26, 18, 16]
     rows = []
     for item in (itens_rastreio or []):
         nfs = item.get("nfs_mp", "")
@@ -735,6 +749,7 @@ def gerar_pdf_laudo_rastreabilidade(romaneio: dict, itens_rastreio: list[dict]) 
             str(item.get("origem", "")),
             str(item.get("opl", "")),
             str(nfs),
+            str(item.get("material_extra", "")),
             str(item.get("grade", "")),
             str(item.get("cor", "")),
         ])

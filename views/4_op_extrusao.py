@@ -15,6 +15,9 @@ except ImportError:
 
 st.title("OP Extrusao")
 
+usuario_logado = st.session_state.get("usuario", "master")
+perfil_logado = st.session_state.get("perfil", "master")
+
 tab_nova, tab_editar, tab_consultar, tab_fechar = st.tabs(["Nova OP", "Editar OP", "Consultar OPs", "Fechar OP"])
 
 # ------------------------------------------------------------------------------
@@ -43,17 +46,39 @@ with tab_nova:
         try:
             df_opl = read_sheet("op_lavacao")
             if not df_opl.empty:
-                opls_disponiveis = df_opl["numero_op"].astype(str).tolist()
-                opl_vinculada = st.selectbox(
-                    "OPL de Origem (rastreabilidade)",
-                    options=opls_disponiveis,
-                    key="ope_opl_origem",
-                )
-                if opl_vinculada:
-                    opl_row = df_opl[df_opl["numero_op"].astype(str) == opl_vinculada]
-                    if not opl_row.empty:
-                        volume_ton = float(opl_row.iloc[0].get("volume_ton", 0) or 0)
-                        st.success(f"Volume puxado da OPL **{opl_vinculada}**: **{volume_ton:.2f} ton** ({volume_ton * 1000:,.1f} kg)")
+                # OPLs ja empenhadas em alguma OPE nao podem ser reutilizadas
+                opls_empenhadas = set()
+                try:
+                    df_ope_exist = read_sheet_no_cache("op_extrusao")
+                    if not df_ope_exist.empty and "opl_origem" in df_ope_exist.columns:
+                        opls_empenhadas = set(
+                            df_ope_exist["opl_origem"].dropna().astype(str).str.strip()
+                        ) - {""}
+                except Exception:
+                    opls_empenhadas = set()
+
+                opls_disponiveis = [
+                    o for o in df_opl["numero_op"].astype(str).tolist()
+                    if o not in opls_empenhadas
+                ]
+
+                if not opls_disponiveis:
+                    st.warning(
+                        "Nenhuma OPL livre. Todas as OPLs ja foram empenhadas em OPEs "
+                        "anteriores."
+                    )
+                    opl_vinculada = ""
+                else:
+                    opl_vinculada = st.selectbox(
+                        "OPL de Origem (rastreabilidade)",
+                        options=opls_disponiveis,
+                        key="ope_opl_origem",
+                    )
+                    if opl_vinculada:
+                        opl_row = df_opl[df_opl["numero_op"].astype(str) == opl_vinculada]
+                        if not opl_row.empty:
+                            volume_ton = float(opl_row.iloc[0].get("volume_ton", 0) or 0)
+                            st.success(f"Volume puxado da OPL **{opl_vinculada}**: **{volume_ton:.2f} ton** ({volume_ton * 1000:,.1f} kg)")
             else:
                 st.warning("Nenhuma OPL cadastrada.")
         except Exception:
@@ -461,6 +486,84 @@ with tab_editar:
                                     st.rerun()
                                 except Exception as exc:
                                     st.error(f"Erro ao atualizar aparas: {exc}")
+
+                # ----------------------------------------------------------
+                # Material extra (somente master) - sem origem em OPL/NF
+                # ----------------------------------------------------------
+                if perfil_logado == "master":
+                    st.divider()
+                    st.markdown("#### Material Extra (sem OPL/NF)")
+                    st.caption(
+                        "Registre material adicionado a OPE sem origem em OPL/NF. O peso "
+                        "soma ao volume previsto da OPE e aparece na rastreabilidade."
+                    )
+                    try:
+                        df_extra_all = read_sheet_no_cache("ope_material_extra")
+                    except Exception:
+                        df_extra_all = pd.DataFrame()
+                    if not df_extra_all.empty and "numero_op" in df_extra_all.columns:
+                        extras_ope = df_extra_all[
+                            df_extra_all["numero_op"].astype(str) == op_edit_num
+                        ].copy()
+                    else:
+                        extras_ope = pd.DataFrame()
+                    if not extras_ope.empty:
+                        extras_ope["peso_kg"] = pd.to_numeric(
+                            extras_ope["peso_kg"], errors="coerce"
+                        ).fillna(0)
+                        cols_x = [
+                            c for c in ["tipo_justificativa", "descricao", "peso_kg",
+                                        "registrado_por", "observacao"]
+                            if c in extras_ope.columns
+                        ]
+                        st.dataframe(extras_ope[cols_x], use_container_width=True, hide_index=True)
+                        st.caption(
+                            f"Total material extra: {formatar_peso(float(extras_ope['peso_kg'].sum()))}"
+                        )
+
+                    with st.form(f"form_material_extra_{op_edit_num}", clear_on_submit=True):
+                        col_x1, col_x2 = st.columns(2)
+                        with col_x1:
+                            extra_tipo = st.selectbox(
+                                "Justificativa", ["Limpo", "Repasse", "Sem NF"],
+                                key=f"extra_tipo_{op_edit_num}",
+                            )
+                            extra_peso = st.number_input(
+                                "Peso (kg)", min_value=0.0, step=0.5, format="%.1f",
+                                value=None, key=f"extra_peso_{op_edit_num}",
+                            )
+                        with col_x2:
+                            extra_desc = st.text_input(
+                                "Descricao do material", key=f"extra_desc_{op_edit_num}"
+                            )
+                            extra_obs = st.text_input(
+                                "Observacao", key=f"extra_obs_{op_edit_num}"
+                            )
+                        if st.form_submit_button(
+                            "Adicionar material extra", type="primary", use_container_width=True
+                        ):
+                            if not extra_desc.strip():
+                                st.error("Informe a descricao do material.")
+                            elif not extra_peso or extra_peso <= 0:
+                                st.error("Peso deve ser maior que zero.")
+                            else:
+                                try:
+                                    append_row("ope_material_extra", {
+                                        "numero_op": op_edit_num,
+                                        "descricao": extra_desc.strip(),
+                                        "tipo_justificativa": extra_tipo,
+                                        "peso_kg": float(extra_peso or 0),
+                                        "registrado_por": usuario_logado,
+                                        "observacao": extra_obs.strip(),
+                                    })
+                                    st.toast("Material extra adicionado!")
+                                    st.success(
+                                        f"Material extra de {formatar_peso(float(extra_peso or 0))} "
+                                        f"adicionado a OPE {op_edit_num}."
+                                    )
+                                    st.rerun()
+                                except Exception as exc:
+                                    st.error(f"Erro ao adicionar material extra: {exc}")
 
 # ------------------------------------------------------------------------------
 # Tab: Consultar OPs
