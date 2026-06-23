@@ -6,6 +6,8 @@ Todos os textos em Portugues (BR).
 Utiliza fpdf2 para geracao dos documentos.
 """
 
+from __future__ import annotations
+
 import os
 from fpdf import FPDF
 from io import BytesIO

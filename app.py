@@ -2,6 +2,19 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# ---------------------------------------------------------------------------
+# Recarrega modulos utilitarios SEM ESTADO a cada execucao.
+# As views sao lidas do disco e exec()-utadas a cada rerun (ver fim do arquivo),
+# mas modulos importados ficam em sys.modules. No Streamlit Cloud, apos um deploy
+# que adiciona nomes em utils/ (ex.: novas funcoes em formatters), o processo
+# pode continuar com a versao antiga em cache -> "ImportError: cannot import
+# name ..." nas views novas, ate um reboot manual. Limpar estes modulos aqui
+# garante que as views sempre importem a versao atual do disco.
+# IMPORTANTE: utils.database NAO entra aqui - ele mantem estado de modulo
+# (versionamento global do cache) que precisa sobreviver entre reruns.
+for _mod in ("utils.formatters", "utils.pdf_generator", "utils.serial_code"):
+    sys.modules.pop(_mod, None)
+
 import streamlit as st
 
 st.set_page_config(
