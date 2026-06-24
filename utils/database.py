@@ -14,7 +14,8 @@ WORKSHEETS = [
     "aparas_estoque",
     "op_lavacao", "op_lavacao_nfs", "producao_lavacao", "paradas_lavacao",
     "turno_lavacao",
-    "op_extrusao", "producao_extrusao", "manutencao_extrusao", "turno_extrusao",
+    "op_extrusao", "producao_extrusao", "manutencao_extrusao", "paradas_extrusao",
+    "turno_extrusao",
     "ope_material_extra",
     "qualidade", "romaneio", "romaneio_itens", "mistura",
 ]

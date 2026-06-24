@@ -3,7 +3,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
 import pandas as pd
-from datetime import date, time, datetime
+from datetime import date, time, datetime, timedelta
 
 from utils.database import read_sheet, read_sheet_no_cache, append_row, update_row_multi
 from utils.serial_code import gerar_codigo_serial, preview_codigo
@@ -11,6 +11,7 @@ from utils.formatters import (
     TURNOS,
     EXTRUSORAS,
     TIPOS_PRODUTO,
+    TIPOS_PARADA,
     formatar_peso,
     formatar_data,
     formatar_duracao,
@@ -57,7 +58,7 @@ def duracao_minutos_ext(hora_inicio: str, hora_fim: str):
     return int(delta)
 
 
-tab_lote, tab_manut, tab_hist = st.tabs(["Novo Lote", "Manutencao", "Historico"])
+tab_lote, tab_paradas, tab_hist = st.tabs(["Novo Lote", "Paradas", "Historico"])
 
 # ---------------------------------------------------------------------------
 # Tab: Novo Lote
@@ -367,10 +368,10 @@ with tab_lote:
         data_str_turno = data_lote.isoformat()
         try:
             df_turno_ext = read_sheet("producao_extrusao")
-            df_manut_turno = read_sheet("manutencao_extrusao")
+            df_paradas_turno = read_sheet("paradas_extrusao")
         except Exception:
             df_turno_ext = pd.DataFrame()
-            df_manut_turno = pd.DataFrame()
+            df_paradas_turno = pd.DataFrame()
 
         registros_turno = []
         if not df_turno_ext.empty:
@@ -382,15 +383,15 @@ with tab_lote:
             if not df_turno_f.empty:
                 registros_turno = df_turno_f.to_dict("records")
 
-        manutencao_turno = []
-        if not df_manut_turno.empty:
-            mask_m = (
-                (df_manut_turno["data"].astype(str) == data_str_turno)
-                & (df_manut_turno["turno"].astype(str) == turno)
+        paradas_turno = []
+        if not df_paradas_turno.empty:
+            mask_p = (
+                (df_paradas_turno["data"].astype(str) == data_str_turno)
+                & (df_paradas_turno["turno"].astype(str) == turno)
             )
-            df_manut_f = df_manut_turno[mask_m]
-            if not df_manut_f.empty:
-                manutencao_turno = df_manut_f.to_dict("records")
+            df_par_f = df_paradas_turno[mask_p]
+            if not df_par_f.empty:
+                paradas_turno = df_par_f.to_dict("records")
 
         if registros_turno:
             total_lotes_t = len(registros_turno)
@@ -410,34 +411,46 @@ with tab_lote:
             col_rt2.metric("Peso Total", formatar_peso(total_kg_t))
             col_rt3.metric("Trocas de Tela", trocas_sim)
 
-            # Eficiencia do turno (usa inicio/fim do turno_extrusao)
+            # Eficiencia do turno (usa inicio/fim do turno_extrusao - tempo parado)
             reg_t = carregar_registro_turno_ext(data_str_turno, turno)
             h_ini_t = str(reg_t.get("hora_inicio", "") or "") if reg_t else ""
             h_fim_t = str(reg_t.get("hora_fim", "") or "") if reg_t else ""
+            paradas_min = 0
+            for p in paradas_turno:
+                try:
+                    paradas_min += int(float(p.get("duracao_min", 0) or 0))
+                except (ValueError, TypeError):
+                    pass
             dur_turno = None
+            dur_liquida = None
             kg_h = None
             if h_ini_t and h_fim_t:
                 dur_turno = duracao_minutos_ext(h_ini_t, h_fim_t)
-                if dur_turno and dur_turno > 0:
-                    kg_h = total_kg_t / (dur_turno / 60)
+                if dur_turno is not None:
+                    dur_liquida = max(0, dur_turno - paradas_min)
+                    horas_liq = dur_liquida / 60
+                    kg_h = (total_kg_t / horas_liq) if horas_liq > 0 else 0.0
 
             st.markdown("##### Eficiencia do Turno")
             if dur_turno is None:
                 st.info("Registre o inicio e o fim do turno (secao 'Controle de Turno') para calcular a eficiencia.")
             else:
-                col_e1, col_e2 = st.columns(2)
+                col_e1, col_e2, col_e3, col_e4 = st.columns(4)
                 col_e1.metric("Duracao Turno", formatar_duracao(dur_turno))
-                col_e2.metric("Produtividade", f"{(kg_h or 0):,.0f} kg/h".replace(",", "."))
+                col_e2.metric("Tempo Parado", formatar_duracao(paradas_min))
+                col_e3.metric("Tempo Liquido", formatar_duracao(dur_liquida))
+                col_e4.metric("Produtividade", f"{(kg_h or 0):,.0f} kg/h".replace(",", "."))
 
             turno_info = {
                 "hora_inicio": h_ini_t, "hora_fim": h_fim_t,
-                "duracao_bruta": dur_turno, "kg_h": kg_h,
+                "duracao_bruta": dur_turno, "paradas_min": paradas_min,
+                "duracao_liquida": dur_liquida, "kg_h": kg_h,
             }
 
             if gerar_pdf_producao_extrusao is not None:
                 try:
                     pdf_bytes = gerar_pdf_producao_extrusao(
-                        data_str_turno, turno, registros_turno, manutencao_turno, turno_info
+                        data_str_turno, turno, registros_turno, paradas_turno, turno_info
                     )
                     st.download_button(
                         "Baixar PDF do Turno",
@@ -453,45 +466,98 @@ with tab_lote:
             st.info("Nenhum lote registrado neste turno ainda.")
 
 # ---------------------------------------------------------------------------
-# Tab: Manutencao
+# Tab: Paradas
 # ---------------------------------------------------------------------------
-with tab_manut:
-    st.subheader("Registro de Manutencao - Extrusao")
+with tab_paradas:
+    st.subheader("Registro de Paradas")
     st.caption("Troca de telas e registrada junto ao lote na aba 'Novo Lote'.")
 
-    with st.form("form_manutencao_extrusao", clear_on_submit=True):
-        col_m1, col_m2 = st.columns(2)
-        with col_m1:
-            data_manut = st.date_input("Data", value=date.today(), key="manut_data")
+    with st.form("form_parada_extrusao", clear_on_submit=True):
+        col_par1, col_par2 = st.columns(2)
+        with col_par1:
+            data_parada = st.date_input("Data", value=date.today(), key="data_parada_ext")
             if turno_fixo_ext:
-                turno_manut = turno_fixo_ext
-                st.info(f"Turno: **{turno_manut}**")
+                turno_parada = turno_fixo_ext
+                st.info(f"Turno: **{turno_parada}**")
             else:
-                turno_manut = st.selectbox("Turno", options=TURNOS, key="manut_turno")
-        with col_m2:
-            limpeza_gaveta = st.text_input("Limpeza de Gaveta")
-            troca_facas = st.text_input("Troca de Facas")
+                turno_parada = st.selectbox("Turno", options=TURNOS, key="turno_parada_ext")
+            tipo_parada = st.selectbox(
+                "Tipo de Parada", options=TIPOS_PARADA, key="tipo_parada_ext"
+            )
+        with col_par2:
+            hora_inicio = st.time_input(
+                "Hora Inicio", value=time(8, 0), key="hora_inicio_parada_ext"
+            )
+            hora_fim = st.time_input(
+                "Hora Fim", value=time(8, 30), key="hora_fim_parada_ext"
+            )
+            observacao_parada = st.text_area("Observacao", key="obs_parada_ext")
 
-        observacao_manut = st.text_area("Observacao")
-
-        submitted_manut = st.form_submit_button(
-            "Registrar Manutencao", use_container_width=True
+        submit_parada = st.form_submit_button(
+            "Registrar Parada", type="primary", use_container_width=True
         )
 
-        if submitted_manut:
+    if submit_parada:
+        dt_inicio = datetime.combine(data_parada, hora_inicio)
+        dt_fim = datetime.combine(data_parada, hora_fim)
+
+        # Se hora_fim < hora_inicio, assume que cruzou meia-noite
+        if dt_fim <= dt_inicio:
+            dt_fim += timedelta(days=1)
+
+        duracao_min = int((dt_fim - dt_inicio).total_seconds() / 60)
+
+        if duracao_min <= 0:
+            st.error("Duracao da parada deve ser maior que zero.")
+        else:
             try:
-                dados_manut = {
-                    "data": data_manut.isoformat(),
-                    "turno": turno_manut,
-                    "troca_telas": "",
-                    "limpeza_gaveta": limpeza_gaveta.strip(),
-                    "troca_facas": troca_facas.strip(),
-                    "observacao": observacao_manut.strip(),
+                dados_parada = {
+                    "data": data_parada.isoformat(),
+                    "turno": turno_parada,
+                    "tipo_parada": tipo_parada,
+                    "hora_inicio": hora_inicio.strftime("%H:%M"),
+                    "hora_fim": hora_fim.strftime("%H:%M"),
+                    "duracao_min": duracao_min,
+                    "observacao": observacao_parada.strip(),
                 }
-                append_row("manutencao_extrusao", dados_manut)
-                st.success("Manutencao registrada com sucesso!")
+                append_row("paradas_extrusao", dados_parada)
+                st.toast("Parada registrada com sucesso!")
+                st.success(
+                    f"Parada registrada: **{tipo_parada}** - "
+                    f"Duracao: {duracao_min} minutos"
+                )
+                st.rerun()
             except Exception as exc:
-                st.error(f"Erro ao registrar manutencao: {exc}")
+                st.error(f"Erro ao registrar parada: {exc}")
+
+    # Exibir paradas recentes
+    st.divider()
+    st.subheader("Paradas Recentes")
+    if turno_fixo_ext:
+        st.caption(f"Exibindo apenas paradas do Turno {turno_fixo_ext}.")
+    try:
+        df_paradas = read_sheet("paradas_extrusao")
+        if turno_fixo_ext and not df_paradas.empty and "turno" in df_paradas.columns:
+            df_paradas = df_paradas[df_paradas["turno"].astype(str) == turno_fixo_ext]
+        if df_paradas.empty:
+            st.info("Nenhuma parada registrada.")
+        else:
+            df_paradas_exib = df_paradas.copy()
+            df_paradas_exib["data"] = df_paradas_exib["data"].apply(formatar_data)
+            colunas_parada = [
+                "data", "turno", "tipo_parada", "hora_inicio",
+                "hora_fim", "duracao_min", "observacao",
+            ]
+            colunas_presentes = [
+                c for c in colunas_parada if c in df_paradas_exib.columns
+            ]
+            st.dataframe(
+                df_paradas_exib[colunas_presentes],
+                use_container_width=True,
+                hide_index=True,
+            )
+    except Exception as exc:
+        st.error(f"Erro ao carregar paradas: {exc}")
 
 # ---------------------------------------------------------------------------
 # Tab: Historico

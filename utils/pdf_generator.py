@@ -504,15 +504,16 @@ def gerar_pdf_producao_extrusao(
     data: str,
     turno: str,
     registros: list[dict],
-    manutencao: list[dict],
+    paradas: list[dict],
     turno_info: dict | None = None,
 ) -> bytes:
     """
     Gera PDF do Relatorio Diario de Extrusao.
 
     registros item keys: hora, lote, extrusora, peso, op, obs
-    manutencao item keys: troca_telas, limpeza_gaveta, troca_facas, obs
-    turno_info (opcional): hora_inicio, hora_fim, duracao_bruta, kg_h
+    paradas item keys: tipo_parada, hora_inicio, hora_fim, duracao_min, observacao
+    turno_info (opcional): hora_inicio, hora_fim, duracao_bruta, paradas_min,
+                           duracao_liquida, kg_h
     """
     pdf = _create_pdf()
     _header(pdf, "RELATORIO DIARIO DE EXTRUSAO")
@@ -525,7 +526,9 @@ def gerar_pdf_producao_extrusao(
         ini = turno_info.get("hora_inicio") or "-"
         fim = turno_info.get("hora_fim") or "-"
         pdf.set_font("Helvetica", "", 9)
-        pdf.cell(0, 6, f"Turno: {ini} -> {fim}  |  Duracao: {_fmt_dur(turno_info.get('duracao_bruta'))}",
+        pdf.cell(0, 6, f"Turno: {ini} -> {fim}  |  Duracao: {_fmt_dur(turno_info.get('duracao_bruta'))}  "
+                       f"|  Parado: {_fmt_dur(turno_info.get('paradas_min'))}  "
+                       f"|  Liquido: {_fmt_dur(turno_info.get('duracao_liquida'))}",
                  new_x="LMARGIN", new_y="NEXT")
         kg_h = turno_info.get("kg_h")
         if kg_h is not None:
@@ -546,20 +549,23 @@ def gerar_pdf_producao_extrusao(
     ]
     _add_table(pdf, headers, rows, col_widths)
 
-    # Manutencao
-    _section_title(pdf, "Manutencao")
-    manutencao = manutencao or []
-    if manutencao:
-        headers_m = ["Troca Telas", "Limpeza Gaveta", "Troca Facas", "Obs"]
-        col_widths_m = [40, 45, 40, 55]
-        rows_m = [
-            [str(m.get("troca_telas", "")), str(m.get("limpeza_gaveta", "")),
-             str(m.get("troca_facas", "")), str(m.get("obs", ""))]
-            for m in manutencao
+    # Paradas
+    paradas = paradas or []
+    _section_title(pdf, "Paradas")
+    if paradas:
+        headers_p = ["Tipo", "Inicio", "Fim", "Duracao (min)", "Obs"]
+        col_widths_p = [45, 25, 25, 30, 55]
+        rows_p = [
+            [str(p.get("tipo_parada", p.get("tipo", ""))),
+             str(p.get("hora_inicio", p.get("inicio", ""))),
+             str(p.get("hora_fim", p.get("fim", ""))),
+             str(p.get("duracao_min", p.get("duracao", ""))),
+             str(p.get("observacao", p.get("obs", "")))]
+            for p in paradas
         ]
-        _add_table(pdf, headers_m, rows_m, col_widths_m)
+        _add_table(pdf, headers_p, rows_p, col_widths_p)
     else:
-        pdf.cell(0, 7, "Nenhuma manutencao registrada.", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 7, "Nenhuma parada registrada.", new_x="LMARGIN", new_y="NEXT")
 
     return _to_bytes(pdf)
 
